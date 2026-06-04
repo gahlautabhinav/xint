@@ -68,7 +68,13 @@ class BrowserPool:
         self._playwright = await async_playwright().start()
         self._browser = await self._playwright.chromium.launch(
             headless=self._config.headless,
-            args=["--no-sandbox", "--disable-dev-shm-usage"],
+            args=[
+                "--no-sandbox",
+                "--disable-dev-shm-usage",
+                # Hide the automation flag so X is less likely to gate content.
+                "--disable-blink-features=AutomationControlled",
+            ],
+            ignore_default_args=["--enable-automation"],
         )
         logger.info(
             "BrowserPool started (headless=%s, max_contexts=%d)",

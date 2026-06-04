@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -359,3 +360,39 @@ class TestBrowserPool:
             await pool.new_page()
 
         mock_stealth.apply_stealth_async.assert_called_once_with(mock_ctx)
+
+
+# ---------------------------------------------------------------------------
+# Session cookie import (scraper.auth.save_session_from_cookies)
+# ---------------------------------------------------------------------------
+
+
+class TestCookieImport:
+    def test_builds_storage_state(self, tmp_path):
+        from scraper import auth
+
+        dest = tmp_path / "twitter_state.json"
+        with patch("scraper.auth.twitter_session_path", return_value=dest):
+            path = auth.save_session_from_cookies("AUTHTOK", "CSRFTOK")
+
+        assert path == dest
+        data = json.loads(dest.read_text(encoding="utf-8"))
+        names = {c["name"] for c in data["cookies"]}
+        assert names == {"auth_token", "ct0"}
+        # auth_token carries the supplied value on the x.com domain
+        x_auth = [
+            c
+            for c in data["cookies"]
+            if c["name"] == "auth_token" and c["domain"] == ".x.com"
+        ]
+        assert len(x_auth) == 1
+        assert x_auth[0]["value"] == "AUTHTOK"
+
+    def test_requires_both_cookies(self, tmp_path):
+        from scraper import auth
+
+        with (
+            patch("scraper.auth.twitter_session_path", return_value=tmp_path / "s.json"),
+            pytest.raises(ValueError),
+        ):
+            auth.save_session_from_cookies("", "ct0")
