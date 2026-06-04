@@ -31,8 +31,25 @@ frontend/node_modules/
 frontend/dist/
 frontend/.vite/
 
-# Tool artifacts
+# AI agent tool dirs — never commit AI session/config state
+.claude/
+.antigravitycli/
+.cursor/
+.copilot/
+.codex/
+.gemini/
+.aider/
+.continue/
+.windsurf/
+.github/copilot/
+graphify-out/
+active/
+
+# Tool session/artifact files
 claude-resume.txt
+CLAUDE.md
+*.aider*
+.aider.tags.cache.v*/
 
 # OS / editor
 .DS_Store
@@ -41,4 +58,3 @@ Thumbs.db
 *.swo
 .idea/
 .vscode/
-graphify-out/
