@@ -3,6 +3,7 @@ from __future__ import annotations
 import click
 
 from cli.commands.accounts import accounts
+from cli.commands.auth import auth
 from cli.commands.crawl import crawl
 from cli.commands.graph import graph
 from cli.commands.jobs import jobs
@@ -24,6 +25,7 @@ def cli() -> None:
     """
 
 
+cli.add_command(auth)
 cli.add_command(login)
 cli.add_command(crawl)
 cli.add_command(jobs)
