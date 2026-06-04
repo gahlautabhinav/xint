@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, cast
 
-from sqlalchemy import func, select
+from sqlalchemy import CursorResult, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from storage.models.job import CrawlJob, JobEvent
+from storage.models.job import CrawlJob, JobEvent, JobQueueItem
 
 
 class JobRepository:
@@ -56,6 +56,22 @@ class JobRepository:
         job.updated_at = datetime.now(timezone.utc)
         await self._session.flush()
         return job
+
+    async def delete_job(self, job_id: uuid.UUID) -> bool:
+        """Delete a job and its child rows (events, queue items).
+
+        SQLite does not honour the declared ``ondelete=CASCADE`` unless
+        ``PRAGMA foreign_keys=ON`` (it is OFF here), so children are deleted
+        explicitly first to avoid orphan rows. Returns ``True`` if a job row
+        was removed.
+        """
+        await self._session.execute(delete(JobEvent).where(JobEvent.job_id == job_id))
+        await self._session.execute(
+            delete(JobQueueItem).where(JobQueueItem.job_id == job_id)
+        )
+        result = await self._session.execute(delete(CrawlJob).where(CrawlJob.id == job_id))
+        await self._session.flush()
+        return bool(cast("CursorResult[Any]", result).rowcount)
 
     async def list_jobs(
         self,

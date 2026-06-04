@@ -142,6 +142,14 @@ export const api = {
     return request<Job>(`/jobs`, { method: "POST", body });
   },
 
+  cancelJob(jobId: string): Promise<Job> {
+    return request<Job>(`/jobs/${jobId}/cancel`, { method: "POST" });
+  },
+
+  deleteJob(jobId: string): Promise<void> {
+    return request<void>(`/jobs/${jobId}`, { method: "DELETE" });
+  },
+
   // ── Accounts ─────────────────────────────────────────────────────────────
   listAccounts(
     opts: { q?: string; limit?: number; offset?: number } = {},
