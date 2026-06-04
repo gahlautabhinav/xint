@@ -1,0 +1,123 @@
+/* =============================================================================
+   xAI-inspired design tokens — sourced 1:1 from scripts/DESIGN-x.ai.md
+   Engineered-cosmic, unmarketed. Near-black canvas, white pill outlines,
+   geometric sans display + uppercase tracked mono labels. Dark-canvas only.
+   ============================================================================= */
+
+:root {
+  color-scheme: dark;
+
+  /* ── Colors ─────────────────────────────────────────────────────────── */
+  --c-primary: #ffffff;
+  --c-on-primary: #0a0a0a;
+
+  --c-ink: #ffffff;
+  --c-ink-hover: #fafaf7;
+  --c-body: #dadbdf;
+  --c-body-mid: #7d8187;
+  --c-mute: #7d8187;
+
+  --c-hairline: #212327;
+  --c-canvas: #0a0a0a;
+  --c-canvas-soft: #1a1c20;
+  --c-canvas-card: #191919;
+  --c-canvas-mid: #363a3f;
+
+  /* Accents — reserved for data/illustration (here: relationship encoding) */
+  --c-accent-sunset: #ff7a17;
+  --c-accent-sunset-soft: #ffc285;
+  --c-accent-dusk: #7c3aed;
+  --c-accent-twilight: #c4b5fd;
+  --c-accent-breeze: #a0c3ec;
+  --c-accent-midnight: #0d1726;
+
+  /* Translucent white — the brand's true outline-pill border at runtime */
+  --c-border-translucent: rgba(255, 255, 255, 0.25);
+  --c-border-translucent-strong: rgba(255, 255, 255, 0.45);
+  --c-fill-translucent: rgba(255, 255, 255, 0.06);
+  --c-fill-translucent-2: rgba(255, 255, 255, 0.1);
+
+  /* ── Typography ─────────────────────────────────────────────────────── */
+  --font-display: "Geist Variable", "Geist", "Inter", system-ui, -apple-system,
+    sans-serif;
+  --font-body: "Geist Variable", "Geist", "Inter", system-ui, -apple-system,
+    sans-serif;
+  --font-mono: "Geist Mono Variable", "Geist Mono", ui-monospace,
+    "SFMono-Regular", Menlo, Monaco, monospace;
+
+  /* size / line-height / tracking pairs from the display ladder */
+  --t-display-xl: 96px;
+  --t-display-xl-lh: 96px;
+  --t-display-xl-ls: -2.4px;
+  --t-display-lg: 72px;
+  --t-display-lg-lh: 72px;
+  --t-display-lg-ls: -1.8px;
+  --t-display-md: 48px;
+  --t-display-md-lh: 48px;
+  --t-display-md-ls: -1.2px;
+  --t-display-sm: 32px;
+  --t-display-sm-lh: 36px;
+  --t-display-sm-ls: -0.6px;
+  --t-display-xs: 20px;
+  --t-display-xs-lh: 28px;
+
+  --t-body-lg: 18px;
+  --t-body-lg-lh: 28px;
+  --t-body-md: 16px;
+  --t-body-md-lh: 24px;
+  --t-body-sm: 14px;
+  --t-body-sm-lh: 20px;
+
+  --t-caption-mono: 14px;
+  --t-caption-mono-lh: 20px;
+  --t-caption-mono-ls: 1.4px;
+  --t-caption-mono-sm: 12px;
+  --t-caption-mono-sm-lh: 16px;
+  --t-caption-mono-sm-ls: 1.2px;
+
+  --weight-regular: 400;
+  --weight-medium: 460; /* very slight — brand stays near-400; used sparingly */
+
+  /* ── Radius ─────────────────────────────────────────────────────────── */
+  --r-none: 0px;
+  --r-sm: 8px;
+  --r-pill: 9999px;
+  --r-full: 9999px;
+
+  /* ── Spacing (4px base) ─────────────────────────────────────────────── */
+  --s-xxs: 2px;
+  --s-xs: 4px;
+  --s-sm: 8px;
+  --s-md: 12px;
+  --s-lg: 16px;
+  --s-xl: 24px;
+  --s-2xl: 32px;
+  --s-3xl: 48px;
+  --s-4xl: 64px;
+
+  /* ── Layout ─────────────────────────────────────────────────────────── */
+  --container: 1200px;
+  --nav-height: 56px;
+
+  /* ── Motion ─────────────────────────────────────────────────────────── */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --dur-fast: 140ms;
+  --dur-mid: 220ms;
+  --dur-slow: 320ms;
+
+  /* ── Z-index scale ──────────────────────────────────────────────────── */
+  --z-base: 0;
+  --z-raised: 10;
+  --z-overlay: 40;
+  --z-nav: 100;
+  --z-toast: 1000;
+
+  /* ── Relationship-type accent map (graph edges) ─────────────────────── */
+  --rel-follows: var(--c-accent-breeze);
+  --rel-mentions: var(--c-accent-sunset);
+  --rel-replies_to: var(--c-accent-sunset-soft);
+  --rel-quote_tweets: var(--c-accent-twilight);
+  --rel-cross_platform_link: var(--c-accent-dusk);
+  --rel-default: var(--c-body-mid);
+}

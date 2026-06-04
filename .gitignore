@@ -30,6 +30,12 @@ build/
 frontend/node_modules/
 frontend/dist/
 frontend/.vite/
+frontend/.playwright-cli/
+frontend/.smoke/
+frontend/*.log
+frontend/*.tsbuildinfo
+frontend/.env
+frontend/.env.local
 
 # AI agent tool dirs — never commit AI session/config state
 .claude/

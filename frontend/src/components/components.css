@@ -1,0 +1,305 @@
+/* =============================================================================
+   Shared UI primitives — pills, inputs, cards, badges, states.
+   Every interactive element is a pill with a translucent-white border.
+   ============================================================================= */
+
+/* ── Pill button ───────────────────────────────────────────────────────── */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-sm);
+  font-family: var(--font-body);
+  font-size: var(--t-body-sm);
+  line-height: var(--t-body-sm-lh);
+  font-weight: var(--weight-regular);
+  border-radius: var(--r-pill);
+  padding: var(--s-sm) var(--s-lg);
+  border: 1px solid var(--c-border-translucent);
+  background: transparent;
+  color: var(--c-ink);
+  white-space: nowrap;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out),
+    opacity var(--dur-fast) var(--ease-out);
+  user-select: none;
+  min-height: 36px;
+}
+.pill:hover:not(:disabled) {
+  border-color: var(--c-border-translucent-strong);
+  background: var(--c-fill-translucent);
+}
+.pill:active:not(:disabled) {
+  transform: scale(0.98);
+}
+.pill:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.pill--sm {
+  padding: var(--s-xs) var(--s-md);
+  min-height: 30px;
+  font-size: var(--t-caption-mono-sm);
+}
+
+/* The rare white-filled CTA — used once per surface as the primary action. */
+.pill--primary {
+  background: var(--c-primary);
+  color: var(--c-on-primary);
+  border-color: var(--c-primary);
+}
+.pill--primary:hover:not(:disabled) {
+  background: var(--c-ink-hover);
+  border-color: var(--c-ink-hover);
+}
+
+/* Selected/active filter pill */
+.pill--active {
+  background: var(--c-fill-translucent-2);
+  border-color: var(--c-border-translucent-strong);
+}
+
+.pill__icon {
+  display: inline-flex;
+  flex: none;
+}
+
+/* ── Text input ────────────────────────────────────────────────────────── */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-sm);
+}
+.field__label {
+  font-family: var(--font-mono);
+  font-size: var(--t-caption-mono-sm);
+  letter-spacing: var(--t-caption-mono-sm-ls);
+  text-transform: uppercase;
+  color: var(--c-mute);
+}
+.field__hint {
+  font-size: var(--t-caption-mono-sm);
+  color: var(--c-mute);
+  font-family: var(--font-mono);
+}
+.field__error {
+  font-size: var(--t-body-sm);
+  color: var(--c-accent-sunset);
+}
+
+.input {
+  background: var(--c-canvas-soft);
+  color: var(--c-ink);
+  border: 1px solid var(--c-hairline);
+  border-radius: var(--r-sm);
+  padding: var(--s-md) var(--s-lg);
+  font-size: var(--t-body-md);
+  line-height: var(--t-body-md-lh);
+  width: 100%;
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+.input::placeholder {
+  color: var(--c-body-mid);
+}
+.input:focus {
+  outline: none;
+  border-color: var(--c-border-translucent-strong);
+}
+/* Keyboard focus must stay visible even though we drop the default outline. */
+.input:focus-visible {
+  border-color: var(--c-border-translucent-strong);
+  box-shadow: 0 0 0 2px var(--c-border-translucent);
+}
+.input--invalid {
+  border-color: var(--c-accent-sunset);
+}
+
+select.input {
+  appearance: none;
+  cursor: pointer;
+  padding-right: var(--s-2xl);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%237d8187' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right var(--s-md) center;
+}
+
+/* ── Search bar (pill-shaped, with leading icon) ───────────────────────── */
+.searchbar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+.searchbar__icon {
+  position: absolute;
+  left: var(--s-lg);
+  color: var(--c-body-mid);
+  pointer-events: none;
+  display: inline-flex;
+}
+.searchbar__input {
+  background: var(--c-canvas-soft);
+  color: var(--c-ink);
+  border: 1px solid var(--c-hairline);
+  border-radius: var(--r-pill);
+  padding: var(--s-md) var(--s-lg) var(--s-md) calc(var(--s-lg) + 28px);
+  font-size: var(--t-body-md);
+  width: 100%;
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+.searchbar__input::placeholder {
+  color: var(--c-body-mid);
+}
+.searchbar__input:focus {
+  outline: none;
+  border-color: var(--c-border-translucent-strong);
+}
+.searchbar__input:focus-visible {
+  box-shadow: 0 0 0 2px var(--c-border-translucent);
+}
+
+/* ── Card ──────────────────────────────────────────────────────────────── */
+.card {
+  background: var(--c-canvas-card);
+  border: 1px solid var(--c-hairline);
+  border-radius: var(--r-sm);
+  padding: var(--s-xl);
+}
+.card--soft {
+  background: var(--c-canvas-soft);
+}
+.card--flush {
+  padding: 0;
+}
+
+/* ── Status badge (job status, verified, platform) ─────────────────────── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-xs);
+  font-family: var(--font-mono);
+  font-size: var(--t-caption-mono-sm);
+  letter-spacing: var(--t-caption-mono-sm-ls);
+  text-transform: uppercase;
+  padding: var(--s-xxs) var(--s-sm);
+  border-radius: var(--r-pill);
+  border: 1px solid var(--c-hairline);
+  color: var(--c-body);
+  white-space: nowrap;
+}
+.badge__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--r-full);
+  background: currentColor;
+  flex: none;
+}
+.badge--running {
+  color: var(--c-accent-sunset);
+  border-color: color-mix(in srgb, var(--c-accent-sunset) 40%, transparent);
+}
+.badge--completed {
+  color: var(--c-accent-breeze);
+  border-color: color-mix(in srgb, var(--c-accent-breeze) 40%, transparent);
+}
+.badge--failed {
+  color: #ff5c5c;
+  border-color: color-mix(in srgb, #ff5c5c 40%, transparent);
+}
+.badge--pending,
+.badge--cancelled {
+  color: var(--c-mute);
+}
+
+/* pulsing dot for live/running state */
+.badge--running .badge__dot {
+  animation: pulse-dot 1.4s ease-in-out infinite;
+}
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+
+/* ── Spinner ───────────────────────────────────────────────────────────── */
+.spinner {
+  width: 18px;
+  height: 18px;
+  border-radius: var(--r-full);
+  border: 2px solid var(--c-hairline);
+  border-top-color: var(--c-ink);
+  animation: spin 0.7s linear infinite;
+  flex: none;
+}
+.spinner--lg {
+  width: 28px;
+  height: 28px;
+  border-width: 3px;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.lucide-spin {
+  animation: spin 0.8s linear infinite;
+}
+
+/* ── State blocks (empty / error / loading) ────────────────────────────── */
+.state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: var(--s-lg);
+  padding: var(--s-4xl) var(--s-xl);
+  color: var(--c-body);
+}
+.state__icon {
+  color: var(--c-canvas-mid);
+  display: inline-flex;
+}
+.state__title {
+  font-family: var(--font-display);
+  font-size: var(--t-display-xs);
+  line-height: var(--t-display-xs-lh);
+  color: var(--c-ink);
+  letter-spacing: -0.2px;
+}
+.state__body {
+  max-width: 42ch;
+  color: var(--c-mute);
+  font-size: var(--t-body-sm);
+}
+.state--error .state__icon {
+  color: #ff5c5c;
+}
+
+/* ── Skeleton shimmer ──────────────────────────────────────────────────── */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--c-canvas-soft) 25%,
+    var(--c-canvas-mid) 37%,
+    var(--c-canvas-soft) 63%
+  );
+  background-size: 400% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+  border-radius: var(--r-sm);
+}
+@keyframes shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
