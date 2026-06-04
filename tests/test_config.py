@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from config.settings import Settings, get_settings
 
@@ -27,33 +28,33 @@ def test_env_override(monkeypatch: pytest.MonkeyPatch):
 
 def test_graph_backend_rejects_invalid(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("GRAPH_BACKEND", "redis")
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         Settings()
 
 
 def test_rate_profile_rejects_invalid(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("RATE_PROFILE", "turbo")
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         Settings()
 
 
 def test_browser_pool_size_bounds(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("BROWSER_POOL_SIZE", "0")
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         Settings()
 
     monkeypatch.setenv("BROWSER_POOL_SIZE", "11")
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         Settings()
 
 
 def test_default_depth_bounds(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("DEFAULT_DEPTH", "0")
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         Settings()
 
     monkeypatch.setenv("DEFAULT_DEPTH", "5")
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         Settings()
 
 
