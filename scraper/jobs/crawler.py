@@ -1,0 +1,286 @@
+from __future__ import annotations
+
+import logging
+import uuid
+from collections import deque
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from urllib.parse import urlparse
+
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+from graph.backends.base import AbstractGraphBackend
+from graph.schema.nodes import make_node_id
+from scraper.browser.pool import BrowserConfig, BrowserPool
+from scraper.jobs.worker import ScrapeResult, scrape_account
+from scraper.proxy.models import Proxy, ProxyHealth
+from scraper.proxy.rotator import ProxyRotator
+from scraper.ratelimit.profiles import ProfileName, get_profile
+from scraper.ratelimit.token_bucket import TokenBucket
+from storage.models.job import CrawlJob, JobStatus
+from storage.models.relationship import RelType
+from storage.repositories.account_repo import AccountRepository
+from storage.repositories.job_repo import JobRepository
+from storage.repositories.relationship_repo import RelationshipRepository
+
+__all__ = ["AccountCrawler", "CrawlerConfig", "CrawlJob", "JobStatus"]
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class CrawlerConfig:
+    seed_username: str
+    max_depth: int = 2
+    max_accounts: int = 500
+    rate_profile_name: ProfileName = "moderate"
+    proxy_urls: list[str] = field(default_factory=list)
+
+
+def _proxies_from_urls(urls: list[str]) -> list[Proxy]:
+    proxies: list[Proxy] = []
+    for url in urls:
+        try:
+            parsed = urlparse(url)
+            if not parsed.hostname or not parsed.port:
+                continue
+            proxies.append(
+                Proxy(
+                    host=parsed.hostname,
+                    port=parsed.port,
+                    scheme=parsed.scheme or "http",
+                    username=parsed.username,
+                    password=parsed.password,
+                    health=ProxyHealth(),
+                )
+            )
+        except Exception as exc:
+            logger.debug("Skipping invalid proxy URL %r: %s", url, exc)
+    return proxies
+
+
+class AccountCrawler:
+    """BFS OSINT crawler: scrapes Twitter profiles and writes graph + storage.
+
+    Instantiate with a config, a SQLAlchemy async session factory, and a
+    graph backend. Call ``await crawler.run()`` to start the crawl.
+
+    Returns the UUID of the created :class:`CrawlJob` record.
+
+    Concurrency: Phase 5 runs single-threaded (one page at a time). The
+    BrowserPool is used for its proxy/UA injection and stealth features.
+    Parallel scraping (one coroutine per pool slot) is deferred to Phase 6.
+    """
+
+    def __init__(
+        self,
+        config: CrawlerConfig,
+        session_factory: async_sessionmaker[AsyncSession],
+        graph: AbstractGraphBackend,
+        browser_config: BrowserConfig | None = None,
+    ) -> None:
+        self._config = config
+        self._sf = session_factory
+        self._graph = graph
+        self._bcfg = browser_config or BrowserConfig()
+
+    async def run(self) -> uuid.UUID:
+        """Execute BFS crawl. Returns the CrawlJob ID."""
+        config = self._config
+        rate_profile = get_profile(config.rate_profile_name)
+        bucket = TokenBucket(
+            capacity=rate_profile.burst_capacity,
+            rate=rate_profile.requests_per_minute / 60.0,
+        )
+        rotator = ProxyRotator(_proxies_from_urls(config.proxy_urls))
+
+        # Create job record
+        async with self._sf() as session:
+            job_repo = JobRepository(session)
+            job = await job_repo.create_job(
+                seed_username=config.seed_username,
+                max_depth=config.max_depth,
+                max_accounts=config.max_accounts,
+                status=JobStatus.RUNNING,
+                started_at=datetime.now(timezone.utc),
+            )
+            job_id: uuid.UUID = job.id
+            await job_repo.emit_event(job_id, "job_started", {"seed": config.seed_username})
+            await session.commit()
+
+        # BFS queue: (username_lowercase, depth)
+        # `visited` bounds total work: the loop runs at most max_accounts iterations
+        # regardless of how many succeed, preventing an infinite loop when every
+        # scrape fails.
+        visited: set[str] = set()
+        queue: deque[tuple[str, int]] = deque([(config.seed_username.lower(), 0)])
+        accounts_scraped = 0  # successful scrapes only — stored in job record
+
+        status = JobStatus.COMPLETED
+        error_msg: str | None = None
+
+        try:
+            async with BrowserPool(self._bcfg) as pool:
+                while queue and len(visited) < config.max_accounts:
+                    username, depth = queue.popleft()
+                    if username in visited:
+                        continue
+                    visited.add(username)
+
+                    try:
+                        proxy = rotator.next()
+                        async with pool.page_context(
+                            proxy_url=proxy.url if proxy else None
+                        ) as page:
+                            result = await scrape_account(
+                                page, username, bucket=bucket, rate_profile=rate_profile
+                            )
+
+                        if proxy is not None:
+                            if result.success:
+                                rotator.mark_success(proxy)
+                            else:
+                                rotator.mark_failed(proxy)
+
+                        new_handles = await self._store(result, depth, job_id)
+                        if result.success:
+                            accounts_scraped += 1
+
+                        if depth < config.max_depth:
+                            for handle in new_handles:
+                                h = handle.lower()
+                                if h not in visited:
+                                    queue.append((h, depth + 1))
+
+                    except Exception as exc:
+                        # Per-account errors are isolated: log and move on.
+                        # Only BrowserPool startup failure (outer try) aborts the job.
+                        logger.warning(
+                            "Skipping %r (depth=%d) after error: %s", username, depth, exc
+                        )
+
+        except Exception as exc:
+            logger.error("Crawler run failed: %s", exc)
+            status = JobStatus.FAILED
+            error_msg = str(exc)
+
+        # Finalize job
+        async with self._sf() as session:
+            job_repo = JobRepository(session)
+            await job_repo.update_job(
+                job_id,
+                status=status,
+                accounts_scraped=accounts_scraped,
+                completed_at=datetime.now(timezone.utc),
+                error_message=error_msg,
+            )
+            await job_repo.emit_event(
+                job_id,
+                "job_finished",
+                {"status": status.value, "accounts_scraped": accounts_scraped},
+            )
+            await session.commit()
+
+        logger.info(
+            "Crawl %s: %s, scraped %d accounts", job_id, status.value, accounts_scraped
+        )
+        return job_id
+
+    async def _store(
+        self,
+        result: ScrapeResult,
+        depth: int,
+        job_id: uuid.UUID,
+    ) -> list[str]:
+        """Persist a ScrapeResult to storage + graph. Returns Twitter handles to enqueue.
+
+        Cross-platform handles (GitHub, Instagram, etc.) are stored as
+        CROSS_PLATFORM_LINK edges but NOT returned for BFS — they belong to
+        different platforms and are not Twitter usernames.
+
+        Stub Account rows are created for mentioned/replied-to accounts at
+        max_depth so edges are recorded even if those accounts won't be scraped.
+        ``AccountRepository.upsert`` merges cleanly when they are later crawled.
+
+        ``upsert_node`` on the graph backend merges props — calling it with an
+        empty dict for stub nodes is safe because the networkx backend unions props.
+        """
+        new_handles: list[str] = []
+        profile = result.profile
+        now = datetime.now(timezone.utc)
+
+        # Collect tweet-derived edges: (handle, RelType)
+        mention_edges: list[tuple[str, RelType]] = []
+        for tweet in result.tweets:
+            for handle in tweet.mentions:
+                mention_edges.append((handle.lower(), RelType.MENTIONS))
+            if tweet.reply_to:
+                mention_edges.append((tweet.reply_to.lower(), RelType.REPLIES_TO))
+        # Deduplicate (handle, rel_type) pairs preserving insertion order
+        seen_edges: set[tuple[str, RelType]] = set()
+        deduped_edges: list[tuple[str, RelType]] = []
+        for pair in mention_edges:
+            if pair not in seen_edges:
+                seen_edges.add(pair)
+                deduped_edges.append(pair)
+
+        async with self._sf() as session:
+            account_repo = AccountRepository(session)
+            rel_repo = RelationshipRepository(session)
+
+            account = await account_repo.upsert(
+                username=result.username,
+                platform="twitter",
+                display_name=profile.display_name,
+                bio=profile.bio,
+                website=profile.website,
+                followers_count=profile.follower_count or 0,
+                following_count=profile.following_count or 0,
+                is_verified=profile.is_verified,
+                scraped_at=now,
+                scrape_depth=depth,
+                raw_data={"success": result.success, "error": result.error},
+            )
+
+            for handle, rel_type in deduped_edges:
+                target = await account_repo.upsert(username=handle, platform="twitter")
+                await rel_repo.upsert(account.id, target.id, rel_type)
+                new_handles.append(handle)
+
+            for platform, handle in result.cross_platform.items():
+                target = await account_repo.upsert(username=handle, platform=platform)
+                await rel_repo.upsert(
+                    account.id,
+                    target.id,
+                    RelType.CROSS_PLATFORM_LINK,
+                    metadata_={"platform": platform},
+                )
+
+            await session.commit()
+
+        # Graph upserts (no transaction — networkx is in-memory)
+        src_id = make_node_id("twitter", result.username)
+        await self._graph.upsert_node(
+            src_id,
+            ["Account"],
+            {
+                "display_name": profile.display_name or "",
+                "bio": profile.bio or "",
+                "followers_count": profile.follower_count or 0,
+                "is_verified": profile.is_verified,
+                "scrape_depth": depth,
+            },
+        )
+        for handle, rel_type in deduped_edges:
+            dst_id = make_node_id("twitter", handle)
+            await self._graph.upsert_node(dst_id, ["Account"], {})
+            await self._graph.upsert_edge(src_id, dst_id, rel_type.value, {"weight": 1.0})
+
+        for platform, handle in result.cross_platform.items():
+            dst_id = make_node_id(platform, handle)
+            await self._graph.upsert_node(dst_id, ["Account"], {"platform": platform})
+            await self._graph.upsert_edge(
+                src_id, dst_id, "CROSS_PLATFORM_LINK", {"weight": 1.0, "platform": platform}
+            )
+
+        return new_handles
