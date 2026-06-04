@@ -6,6 +6,7 @@ from cli.commands.accounts import accounts
 from cli.commands.crawl import crawl
 from cli.commands.graph import graph
 from cli.commands.jobs import jobs
+from cli.commands.login import login
 
 
 @click.group()
@@ -15,6 +16,7 @@ def cli() -> None:
 
     \b
     Quick start:
+      xint login                       # authenticate once (X needs a session)
       xint crawl elonmusk --depth 2 --max-accounts 200
       xint jobs list
       xint accounts list
@@ -22,6 +24,7 @@ def cli() -> None:
     """
 
 
+cli.add_command(login)
 cli.add_command(crawl)
 cli.add_command(jobs)
 cli.add_command(accounts)

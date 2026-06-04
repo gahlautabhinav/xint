@@ -422,3 +422,30 @@ def test_graph_export_depth_option(runner: CliRunner) -> None:
         runner.invoke(cli, ["graph", "export", "alice", "--depth", "3"])
 
     assert captured["depth"] == 3
+
+
+# ---------------------------------------------------------------------------
+# xint login
+# ---------------------------------------------------------------------------
+
+
+def test_login_help(runner: CliRunner) -> None:
+    r = runner.invoke(cli, ["login", "--help"])
+    assert r.exit_code == 0
+    assert "session" in r.output.lower()
+
+
+def test_login_saves_session(runner: CliRunner, tmp_path) -> None:
+    captured: dict = {}
+    fake_path = tmp_path / "twitter_state.json"
+
+    async def fake_save(headless: bool = False):
+        captured["headless"] = headless
+        return fake_path
+
+    with patch("scraper.auth.save_login_session", side_effect=fake_save):
+        r = runner.invoke(cli, ["login"])
+
+    assert r.exit_code == 0
+    assert "Session saved" in r.output
+    assert captured["headless"] is False

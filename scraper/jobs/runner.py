@@ -41,13 +41,19 @@ async def _crawl(
     # API keeps reading while the crawl writes). The graph backend is the
     # shared in-memory instance so crawl results show up in the API.
     from config.settings import get_settings
+    from scraper.session import authed_browser_config
     from storage.engine import create_engine_from_settings
     from storage.session import create_session_factory
 
     engine = create_engine_from_settings(get_settings())
     try:
         session_factory = create_session_factory(engine)
-        crawler = AccountCrawler(config=config, session_factory=session_factory, graph=graph)
+        crawler = AccountCrawler(
+            config=config,
+            session_factory=session_factory,
+            graph=graph,
+            browser_config=authed_browser_config(),
+        )
         await crawler.run(job_id=job_id)
     except Exception:
         logger.exception("Crawl job %s crashed in worker thread", job_id)

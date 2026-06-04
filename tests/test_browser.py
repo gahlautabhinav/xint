@@ -240,6 +240,41 @@ class TestBrowserPool:
         _, kwargs = mock_browser.new_context.call_args
         assert "proxy" not in kwargs
 
+    async def test_storage_state_loaded_when_file_exists(self, tmp_path):
+        state_file = tmp_path / "twitter_state.json"
+        state_file.write_text("{}", encoding="utf-8")
+        mock_page, mock_ctx, mock_browser, mock_playwright, mock_ap = (
+            _make_mock_playwright_stack()
+        )
+        with (
+            patch("scraper.browser.pool.async_playwright", return_value=mock_ap),
+            patch("scraper.browser.pool._stealth") as mock_stealth,
+        ):
+            mock_stealth.apply_stealth_async = AsyncMock()
+            pool = BrowserPool(BrowserConfig(storage_state_path=str(state_file)))
+            await pool.start()
+            await pool.new_page()
+
+        _, kwargs = mock_browser.new_context.call_args
+        assert kwargs["storage_state"] == str(state_file)
+
+    async def test_no_storage_state_when_file_missing(self, tmp_path):
+        missing = tmp_path / "nope.json"
+        mock_page, mock_ctx, mock_browser, mock_playwright, mock_ap = (
+            _make_mock_playwright_stack()
+        )
+        with (
+            patch("scraper.browser.pool.async_playwright", return_value=mock_ap),
+            patch("scraper.browser.pool._stealth") as mock_stealth,
+        ):
+            mock_stealth.apply_stealth_async = AsyncMock()
+            pool = BrowserPool(BrowserConfig(storage_state_path=str(missing)))
+            await pool.start()
+            await pool.new_page()
+
+        _, kwargs = mock_browser.new_context.call_args
+        assert "storage_state" not in kwargs
+
     async def test_close_page_releases_semaphore(self):
         mock_page, mock_ctx, mock_browser, mock_playwright, mock_ap = (
             _make_mock_playwright_stack()
