@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 from dataclasses import dataclass, field
@@ -78,8 +79,12 @@ _PROFILE_JS = """
         }
     }
 
+    // Followers link is "/verified_followers" on many (esp. verified) profiles,
+    // not "/followers" — match both so the follower count isn't lost.
     const statLinks = Array.from(
-        document.querySelectorAll('a[href$="/following"], a[href$="/followers"]')
+        document.querySelectorAll(
+            'a[href$="/following"], a[href$="/followers"], a[href$="/verified_followers"]'
+        )
     );
     let following_raw = null, followers_raw = null;
     for (const a of statLinks) {
@@ -87,7 +92,8 @@ _PROFILE_JS = """
         const span = a.querySelector('span');
         const val = span ? span.innerText.trim() : null;
         if (href.endsWith('/following') && !following_raw) following_raw = val;
-        if (href.endsWith('/followers') && !followers_raw) followers_raw = val;
+        if ((href.endsWith('/followers') || href.endsWith('/verified_followers')) && !followers_raw)
+            followers_raw = val;
     }
 
     return {
@@ -129,6 +135,74 @@ _TWEETS_JS = r"""
     });
 }
 """
+
+
+_FOLLOWING_JS = r"""
+() => {
+    const out = [];
+    for (const cell of document.querySelectorAll('[data-testid="UserCell"]')) {
+        for (const a of cell.querySelectorAll('a[href^="/"]')) {
+            const m = (a.getAttribute('href') || '').match(/^\/([A-Za-z0-9_]{1,15})$/);
+            if (m) { out.push(m[1]); break; }
+        }
+    }
+    return out;
+}
+"""
+
+# Handles that look like profiles but aren't accounts.
+_RESERVED_HANDLES = frozenset(
+    {"home", "explore", "notifications", "messages", "i", "settings", "search", "compose"}
+)
+
+
+async def extract_following(
+    page: Page,
+    *,
+    max_count: int = 50,
+    max_scrolls: int = 25,
+    scroll_pause_ms: int = 900,
+) -> list[str]:
+    """Collect handles from a ``/<user>/following`` page.
+
+    X virtualizes the list — cells are recycled as you scroll — so handles are
+    accumulated into an ordered, de-duplicated set across scroll steps until
+    *max_count* is reached or the list stops growing.
+    """
+    seen: set[str] = set()
+    ordered: list[str] = []
+    stagnant = 0
+
+    for _ in range(max_scrolls):
+        try:
+            handles: list[str] = await page.evaluate(_FOLLOWING_JS)
+        except Exception as exc:
+            logger.warning("extract_following evaluate failed: %s", exc)
+            break
+
+        added = 0
+        for h in handles:
+            hl = h.lower()
+            if hl in _RESERVED_HANDLES or hl in seen:
+                continue
+            seen.add(hl)
+            ordered.append(h)
+            added += 1
+            if len(ordered) >= max_count:
+                return ordered[:max_count]
+
+        stagnant = stagnant + 1 if added == 0 else 0
+        if stagnant >= 3:
+            break
+
+        try:
+            await page.evaluate("window.scrollBy(0, 1200)")
+        except Exception as exc:
+            logger.warning("extract_following scroll failed: %s", exc)
+            break
+        await asyncio.sleep(scroll_pause_ms / 1000.0)
+
+    return ordered[:max_count]
 
 
 async def extract_profile(page: Page) -> ProfileData:

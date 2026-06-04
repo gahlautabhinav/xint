@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 from scraper.extractors.cross_platform import extract_all_links, extract_cross_platform_links
 from scraper.extractors.twitter import (
     ProfileData,
     TweetData,
     _parse_count,
+    extract_following,
     extract_hashtags_from_text,
     extract_mentions_from_text,
     extract_profile,
@@ -309,3 +310,43 @@ class TestExtractAllLinks:
 
     def test_empty_strings(self):
         assert extract_all_links(["", "   "]) == {}
+
+
+# ---------------------------------------------------------------------------
+# extract_following (accumulate across virtualized scrolls)
+# ---------------------------------------------------------------------------
+
+
+class TestExtractFollowing:
+    async def test_dedups_and_preserves_order(self):
+        # X recycles cells on scroll; batches overlap. Result must dedupe,
+        # keep first-seen order, and skip reserved handles.
+        batches = [["alice", "bob", "alice"], ["bob", "home", "carol"], ["carol", "dave"]]
+        idx = {"n": 0}
+
+        async def fake_eval(js, *args, **kwargs):
+            if "scrollBy" in js:
+                return None
+            i = min(idx["n"], len(batches) - 1)
+            idx["n"] += 1
+            return batches[i]
+
+        page = AsyncMock()
+        page.evaluate = AsyncMock(side_effect=fake_eval)
+        with patch("scraper.extractors.twitter.asyncio.sleep", new=AsyncMock()):
+            result = await extract_following(page, max_count=10, max_scrolls=10)
+
+        assert result == ["alice", "bob", "carol", "dave"]  # "home" reserved → dropped
+
+    async def test_respects_max_count(self):
+        async def fake_eval(js, *args, **kwargs):
+            if "scrollBy" in js:
+                return None
+            return ["a", "b", "c", "d", "e"]
+
+        page = AsyncMock()
+        page.evaluate = AsyncMock(side_effect=fake_eval)
+        with patch("scraper.extractors.twitter.asyncio.sleep", new=AsyncMock()):
+            result = await extract_following(page, max_count=3, max_scrolls=10)
+
+        assert result == ["a", "b", "c"]
