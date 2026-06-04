@@ -449,3 +449,21 @@ def test_login_saves_session(runner: CliRunner, tmp_path) -> None:
     assert r.exit_code == 0
     assert "Session saved" in r.output
     assert captured["headless"] is False
+
+
+def test_login_cookies_mode(runner: CliRunner, tmp_path) -> None:
+    captured: dict = {}
+    fake_path = tmp_path / "twitter_state.json"
+
+    def fake_from_cookies(auth_token, ct0):
+        captured["auth_token"] = auth_token
+        captured["ct0"] = ct0
+        return fake_path
+
+    with patch("scraper.auth.save_session_from_cookies", side_effect=fake_from_cookies):
+        r = runner.invoke(cli, ["login", "--cookies"], input="tok123\ncsrf456\n")
+
+    assert r.exit_code == 0
+    assert "Session saved" in r.output
+    assert captured["auth_token"] == "tok123"
+    assert captured["ct0"] == "csrf456"
