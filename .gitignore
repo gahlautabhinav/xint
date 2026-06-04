@@ -44,6 +44,7 @@ frontend/.vite/
 .github/copilot/
 graphify-out/
 active/
+scripts/
 
 # Tool session/artifact files
 claude-resume.txt
