@@ -1,5 +1,6 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
+import { Trash2 } from "lucide-react";
 import { api } from "@/lib/api";
 import type { Job } from "@/lib/types";
 import { formatCount, relativeTime } from "@/lib/format";
@@ -12,11 +13,17 @@ import "./jobs.css";
 const ACTIVE = new Set(["RUNNING", "PENDING"]);
 
 function JobsList() {
+  const qc = useQueryClient();
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["jobs"],
     queryFn: () => api.listJobs({ limit: 50 }),
     refetchInterval: (q) =>
       q.state.data?.items.some((j: Job) => ACTIVE.has(j.status)) ? 3000 : false,
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: (id: string) => api.deleteJob(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["jobs"] }),
   });
 
   if (isLoading) return <LoadingState title="Loading jobs…" />;
@@ -48,6 +55,7 @@ function JobsList() {
             <th className="num">Scraped</th>
             <th className="num">Depth</th>
             <th>Started</th>
+            <th aria-label="Actions" />
           </tr>
         </thead>
         <tbody>
@@ -67,6 +75,22 @@ function JobsList() {
               <td className="num tabular">{job.max_depth}</td>
               <td className="mono jobs-row__time">
                 {relativeTime(job.started_at ?? job.created_at)}
+              </td>
+              <td className="jobs-row__actions">
+                {!ACTIVE.has(job.status) && (
+                  <button
+                    className="iconbtn iconbtn--danger"
+                    title="Delete job"
+                    aria-label={`Delete crawl for ${job.seed_username}`}
+                    disabled={deleteMut.isPending}
+                    onClick={() => {
+                      if (window.confirm(`Delete the crawl for @${job.seed_username}?`))
+                        deleteMut.mutate(job.id);
+                    }}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                )}
               </td>
             </tr>
           ))}
