@@ -39,7 +39,8 @@ export function buildStylesheet(): StylesheetStyle[] {
         "text-background-opacity": 0.55,
         "text-background-padding": "2px",
         "text-background-shape": "roundrectangle",
-        "transition-property": "background-opacity, border-color, opacity",
+        "text-opacity": 1,
+        "transition-property": "background-opacity, border-color, opacity, text-opacity",
         "transition-duration": 140,
       } as StyleObj,
     },
@@ -117,6 +118,43 @@ export function buildStylesheet(): StylesheetStyle[] {
       selector: ".rel-hidden",
       style: {
         display: "none",
+      } as StyleObj,
+    },
+    // ── Declutter: zoom-aware labels + local focus ─────────────────────────
+    // Minor nodes' labels fade when zoomed out (toggled in GraphCanvas on zoom).
+    {
+      selector: "node.label-faint",
+      style: {
+        "text-opacity": 0,
+      } as StyleObj,
+    },
+    // Reveal labels for selected / hovered / neighbour nodes (after the faint
+    // rule so these win on equal specificity).
+    {
+      selector: "node:selected",
+      style: {
+        "text-opacity": 1,
+      } as StyleObj,
+    },
+    {
+      selector: "node.hl-node",
+      style: {
+        "text-opacity": 1,
+      } as StyleObj,
+    },
+    {
+      selector: "node.nbr",
+      style: {
+        "text-opacity": 1,
+      } as StyleObj,
+    },
+    // Local focus mode: everything outside the focused neighbourhood fades.
+    // Separate class from `.dimmed` so hover (which toggles `.dimmed`) and
+    // focus don't clobber each other.
+    {
+      selector: ".focus-dim",
+      style: {
+        opacity: 0.1,
       } as StyleObj,
     },
   ];

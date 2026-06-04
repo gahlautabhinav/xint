@@ -8,6 +8,7 @@ import {
   Network,
   Search,
   Shuffle,
+  Target,
 } from "lucide-react";
 
 import { api, ApiError } from "@/lib/api";
@@ -46,6 +47,8 @@ export function GraphExplorer() {
   );
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [hiddenRel, setHiddenRel] = useState<Set<string>>(new Set());
+  const [focusMode, setFocusMode] = useState(false);
+  const [focusHops, setFocusHops] = useState(1);
   const [expandingId, setExpandingId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [fitSignal, setFitSignal] = useState(0);
@@ -93,6 +96,7 @@ export function GraphExplorer() {
       setElementsMap(new Map());
       setSelectedId(null);
       setHiddenRel(new Set());
+      setFocusMode(false);
       const next = new URLSearchParams(params);
       next.set("q", handle);
       next.set("depth", String(depth));
@@ -129,8 +133,10 @@ export function GraphExplorer() {
     [rootId, flashNotice],
   );
 
+  // Inspector "Focus" action: isolate this node's neighbourhood + centre on it.
   const focusNode = useCallback((id: string) => {
     setSelectedId(id);
+    setFocusMode(true);
     setFitSignal((s) => s + 1);
   }, []);
 
@@ -323,6 +329,37 @@ export function GraphExplorer() {
 
         <Pill
           size="sm"
+          icon={<Target size={14} />}
+          active={focusMode}
+          onClick={() => setFocusMode((f) => !f)}
+          disabled={!selectedNode}
+          title={
+            selectedNode
+              ? "Focus — dim everything beyond the selected node's neighbourhood"
+              : "Select a node to focus on its neighbourhood"
+          }
+        >
+          Focus
+        </Pill>
+        {focusMode && (
+          <label className="explorer__control" title="Focus radius (hops)">
+            <span className="eyebrow eyebrow--sm">Hops</span>
+            <select
+              className="input input--mini"
+              value={focusHops}
+              onChange={(e) => setFocusHops(Number(e.target.value))}
+            >
+              {[1, 2, 3].map((h) => (
+                <option key={h} value={h}>
+                  {h}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+
+        <Pill
+          size="sm"
           icon={<Shuffle size={14} />}
           onClick={() => setRelayoutSignal((s) => s + 1)}
           disabled={!hasGraph}
@@ -400,6 +437,8 @@ export function GraphExplorer() {
               fitSignal={fitSignal}
               relayoutSignal={relayoutSignal}
               reducedMotion={reducedMotion}
+              focusMode={focusMode}
+              focusHops={focusHops}
             />
 
             {/* Top-left: rel filter + stats */}
