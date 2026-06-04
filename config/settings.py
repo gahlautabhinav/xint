@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     )
 
     # Database
-    DATABASE_URL: str = "sqlite+aiosqlite:///./data/osint.db"
+    DATABASE_URL: str = "sqlite+aiosqlite:///./data/xint.db"
 
     # Graph backend
     GRAPH_BACKEND: Literal["neo4j", "networkx"] = "networkx"

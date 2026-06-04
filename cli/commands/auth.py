@@ -18,7 +18,7 @@ def revoke() -> None:
 	"""Delete the saved X/Twitter session (log out).
 
 	\b
-	After revoking, run 'osint login' or 'osint login --cookies' to log in
+	After revoking, run 'xint login' or 'xint login --cookies' to log in
 	with a different account.
 	"""
 	session_path = Path("config/sessions/twitter_state.json")
@@ -30,7 +30,7 @@ def revoke() -> None:
 	try:
 		session_path.unlink()
 		console.print("[green]Session revoked[/green]")
-		console.print("[dim]Run [bold]osint login[/bold] to log in with a different account.[/dim]")
+		console.print("[dim]Run [bold]xint login[/bold] to log in with a different account.[/dim]")
 	except OSError as exc:
 		console.print(f"[red]Failed to delete session:[/red] {exc}")
 		raise SystemExit(1) from exc
@@ -43,7 +43,7 @@ def status() -> None:
 
 	if not session_path.exists():
 		console.print("[yellow]NOT LOGGED IN[/yellow]")
-		console.print("[dim]Run [bold]osint login[/bold] or [bold]osint login --cookies[/bold] to authenticate.[/dim]")
+		console.print("[dim]Run [bold]xint login[/bold] or [bold]xint login --cookies[/bold] to authenticate.[/dim]")
 		raise SystemExit(1)
 
 	try:
@@ -51,7 +51,7 @@ def status() -> None:
 			data = json.load(f)
 	except (json.JSONDecodeError, OSError) as exc:
 		console.print(f"[red]SESSION CORRUPTED:[/red] {exc}")
-		console.print("[dim]Re-run [bold]osint login[/bold] to fix.[/dim]")
+		console.print("[dim]Re-run [bold]xint login[/bold] to fix.[/dim]")
 		raise SystemExit(1) from exc
 
 	# Try to extract account info from cookies
@@ -64,4 +64,4 @@ def status() -> None:
 		console.print(f"[dim]Token (first 20 chars): {auth_token[:20]}...[/dim]")
 	else:
 		console.print("[yellow]SESSION FOUND BUT NO AUTH TOKEN[/yellow]")
-		console.print("[dim]Run [bold]osint login --cookies[/bold] to re-import.[/dim]")
+		console.print("[dim]Run [bold]xint login --cookies[/bold] to re-import.[/dim]")

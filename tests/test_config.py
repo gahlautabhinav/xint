@@ -8,7 +8,7 @@ from config.settings import Settings, get_settings
 
 def test_defaults_load():
     s = Settings()
-    assert s.DATABASE_URL == "sqlite+aiosqlite:///./data/osint.db"
+    assert s.DATABASE_URL == "sqlite+aiosqlite:///./data/xint.db"
     assert s.GRAPH_BACKEND == "networkx"
     assert s.BROWSER_POOL_SIZE == 3
     assert s.RATE_PROFILE == "moderate"

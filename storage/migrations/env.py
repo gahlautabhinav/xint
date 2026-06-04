@@ -35,7 +35,7 @@ def _get_url() -> str:
     # Prefer explicit alembic config (set_main_option / alembic.ini) over env var.
     # This lets tests pass a custom URL via Config.set_main_option("sqlalchemy.url", ...)
     ini_url = config.get_main_option("sqlalchemy.url") or ""
-    raw = ini_url if ini_url.strip() else os.environ.get("DATABASE_URL", "sqlite:///./data/osint.db")
+    raw = ini_url if ini_url.strip() else os.environ.get("DATABASE_URL", "sqlite:///./data/xint.db")
     return _sync_url(raw)
 
 

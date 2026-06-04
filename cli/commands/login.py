@@ -34,8 +34,8 @@ def login(use_cookies: bool, headless: bool) -> None:
 
     \b
     Two methods:
-      osint login              # opens a browser to log in (X may rate-limit this)
-      osint login --cookies    # paste auth_token + ct0 cookies (most reliable)
+      xint login              # opens a browser to log in (X may rate-limit this)
+      xint login --cookies    # paste auth_token + ct0 cookies (most reliable)
     """
     if use_cookies:
         _login_with_cookies()
@@ -56,7 +56,7 @@ def login(use_cookies: bool, headless: bool) -> None:
 
     console.print(f"[green]✓ Session saved →[/green] {path}")
     console.print(
-        "[dim]Crawls will now run authenticated. Re-run `osint login` if the session expires.[/dim]"
+        "[dim]Crawls will now run authenticated. Re-run `xint login` if the session expires.[/dim]"
     )
 
 
