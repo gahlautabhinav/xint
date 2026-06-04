@@ -10,7 +10,9 @@ from pydantic import BaseModel, ConfigDict, Field
 class JobCreate(BaseModel):
     seed_username: str = Field(min_length=1, max_length=100)
     max_depth: int = Field(default=2, ge=1, le=5)
-    max_accounts: int = Field(default=500, ge=1, le=5000)
+    max_accounts: int = Field(default=500, ge=1, le=10000)
+    max_following: int = Field(default=50, ge=1, le=5000)
+    max_followers: int = Field(default=50, ge=1, le=5000)
     rate_profile: str = Field(default="moderate")
     proxy_urls: list[str] = Field(default_factory=list)
 

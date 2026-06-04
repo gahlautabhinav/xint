@@ -18,7 +18,7 @@
 }
 .crawlform__grid {
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr 2fr;
+  grid-template-columns: 2fr 1fr 2fr 1fr 1fr 2fr;
   gap: var(--s-lg);
 }
 .crawlform__proxies {
@@ -58,7 +58,12 @@
   color: var(--accent);
 }
 
-@media (max-width: 720px) {
+@media (max-width: 900px) {
+  .crawlform__grid {
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+}
+@media (max-width: 600px) {
   .crawlform__grid {
     grid-template-columns: 1fr 1fr;
   }

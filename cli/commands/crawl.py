@@ -18,6 +18,8 @@ logger = logging.getLogger(__name__)
 @click.argument("username")
 @click.option("--depth", "-d", default=None, type=int, help="BFS depth (default: settings.DEFAULT_DEPTH)")
 @click.option("--max-accounts", "-n", default=None, type=int, help="Account cap (default: settings.DEFAULT_MAX_ACCOUNTS)")
+@click.option("--max-following", default=50, type=int, show_default=True, help="Max following per account")
+@click.option("--max-followers", default=50, type=int, show_default=True, help="Max followers per account")
 @click.option(
     "--rate-profile",
     "-r",
@@ -30,17 +32,21 @@ def crawl(
     username: str,
     depth: int | None,
     max_accounts: int | None,
+    max_following: int,
+    max_followers: int,
     rate_profile: str | None,
     proxy_file: str | None,
 ) -> None:
     """Crawl @USERNAME and build the OSINT graph."""
-    asyncio.run(_do_crawl(username, depth, max_accounts, rate_profile, proxy_file))
+    asyncio.run(_do_crawl(username, depth, max_accounts, max_following, max_followers, rate_profile, proxy_file))
 
 
 async def _do_crawl(
     username: str,
     depth: int | None,
     max_accounts: int | None,
+    max_following: int,
+    max_followers: int,
     rate_profile: str | None,
     proxy_file: str | None,
 ) -> None:
@@ -73,6 +79,8 @@ async def _do_crawl(
         seed_username=username,
         max_depth=resolved_depth,
         max_accounts=resolved_max,
+        max_following=max_following,
+        max_followers=max_followers,
         rate_profile_name=resolved_rate,  # type: ignore[arg-type]
         proxy_urls=proxy_urls,
     )

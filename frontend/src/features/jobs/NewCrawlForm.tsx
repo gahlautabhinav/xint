@@ -23,6 +23,8 @@ export function NewCrawlForm() {
   const [seed, setSeed] = useState("");
   const [depth, setDepth] = useState(2);
   const [maxAccounts, setMaxAccounts] = useState(200);
+  const [maxFollowing, setMaxFollowing] = useState(50);
+  const [maxFollowers, setMaxFollowers] = useState(50);
   const [rate, setRate] = useState<JobCreate["rate_profile"]>("moderate");
   const [proxies, setProxies] = useState("");
   const [seedError, setSeedError] = useState<string | undefined>();
@@ -47,6 +49,8 @@ export function NewCrawlForm() {
       seed_username: handle,
       max_depth: depth,
       max_accounts: maxAccounts,
+      max_following: maxFollowing,
+      max_followers: maxFollowers,
       rate_profile: rate,
       proxy_urls: proxies
         .split(/[\n,]/)
@@ -106,6 +110,42 @@ export function NewCrawlForm() {
             ))}
           </div>
           <span className="field__hint">Type any value or pick a preset.</span>
+        </div>
+        <div className="field">
+          <label className="field__label">Max following / account</label>
+          <input
+            type="number"
+            className="input"
+            min={1}
+            max={5000}
+            value={maxFollowing}
+            onChange={(e) => { const v = parseInt(e.target.value, 10); if (!isNaN(v) && v >= 1) setMaxFollowing(v); }}
+          />
+          <div className="crawlform__presets">
+            {[25, 50, 100, 200, 500].map((n) => (
+              <button key={n} type="button"
+                className={`crawlform__preset${maxFollowing === n ? " crawlform__preset--active" : ""}`}
+                onClick={() => setMaxFollowing(n)}>{n}</button>
+            ))}
+          </div>
+        </div>
+        <div className="field">
+          <label className="field__label">Max followers / account</label>
+          <input
+            type="number"
+            className="input"
+            min={1}
+            max={5000}
+            value={maxFollowers}
+            onChange={(e) => { const v = parseInt(e.target.value, 10); if (!isNaN(v) && v >= 1) setMaxFollowers(v); }}
+          />
+          <div className="crawlform__presets">
+            {[25, 50, 100, 200, 500].map((n) => (
+              <button key={n} type="button"
+                className={`crawlform__preset${maxFollowers === n ? " crawlform__preset--active" : ""}`}
+                onClick={() => setMaxFollowers(n)}>{n}</button>
+            ))}
+          </div>
         </div>
         <SelectField
           label="Rate profile"

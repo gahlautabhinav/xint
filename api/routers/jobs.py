@@ -39,6 +39,8 @@ async def create_job(
         seed_username=body.seed_username,
         max_depth=body.max_depth,
         max_accounts=body.max_accounts,
+        max_following=body.max_following,
+        max_followers=body.max_followers,
         rate_profile_name=body.rate_profile,  # type: ignore[arg-type]
         proxy_urls=body.proxy_urls,
     )

@@ -95,6 +95,8 @@ export interface JobCreate {
   seed_username: string;
   max_depth: number;
   max_accounts: number;
+  max_following: number;
+  max_followers: number;
   rate_profile: "conservative" | "moderate" | "aggressive";
   proxy_urls: string[];
 }
