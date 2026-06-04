@@ -84,8 +84,14 @@ class AccountCrawler:
         self._graph = graph
         self._bcfg = browser_config or BrowserConfig()
 
-    async def run(self) -> uuid.UUID:
-        """Execute BFS crawl. Returns the CrawlJob ID."""
+    async def run(self, job_id: uuid.UUID | None = None) -> uuid.UUID:
+        """Execute BFS crawl. Returns the CrawlJob ID.
+
+        When *job_id* is given the crawler adopts that existing job row
+        (created by the API endpoint so it can return a real id immediately)
+        and marks it RUNNING. When omitted it creates its own job record —
+        the path used by the CLI and tests.
+        """
         config = self._config
         rate_profile = get_profile(config.rate_profile_name)
         bucket = TokenBucket(
@@ -94,17 +100,25 @@ class AccountCrawler:
         )
         rotator = ProxyRotator(_proxies_from_urls(config.proxy_urls))
 
-        # Create job record
+        # Create — or adopt — the job record
+        started_at = datetime.now(timezone.utc)
         async with self._sf() as session:
             job_repo = JobRepository(session)
-            job = await job_repo.create_job(
-                seed_username=config.seed_username,
-                max_depth=config.max_depth,
-                max_accounts=config.max_accounts,
-                status=JobStatus.RUNNING,
-                started_at=datetime.now(timezone.utc),
-            )
-            job_id: uuid.UUID = job.id
+            if job_id is None:
+                job = await job_repo.create_job(
+                    seed_username=config.seed_username,
+                    max_depth=config.max_depth,
+                    max_accounts=config.max_accounts,
+                    status=JobStatus.RUNNING,
+                    started_at=started_at,
+                )
+                job_id = job.id
+            else:
+                await job_repo.update_job(
+                    job_id,
+                    status=JobStatus.RUNNING,
+                    started_at=started_at,
+                )
             await job_repo.emit_event(job_id, "job_started", {"seed": config.seed_username})
             await session.commit()
 

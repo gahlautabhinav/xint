@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import asyncio
 import logging
+import threading
 import uuid
-from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException, Query, Request, status
+from fastapi import APIRouter, HTTPException, Query, status
 
 from api.dependencies import ApiKeyCheck, DbSession, GraphBackend
 from api.schemas.jobs import (
@@ -15,7 +14,9 @@ from api.schemas.jobs import (
     JobListResponse,
     JobResponse,
 )
-from scraper.jobs.crawler import AccountCrawler, CrawlerConfig
+from scraper.jobs.crawler import CrawlerConfig
+from scraper.jobs.runner import run_crawl_in_thread
+from storage.models.job import JobStatus
 from storage.repositories.job_repo import JobRepository
 
 logger = logging.getLogger(__name__)
@@ -26,14 +27,14 @@ router = APIRouter(prefix="/jobs", tags=["jobs"])
 @router.post("", status_code=status.HTTP_202_ACCEPTED, response_model=JobResponse)
 async def create_job(
     body: JobCreate,
-    request: Request,
     _key: ApiKeyCheck,
     session: DbSession,
     graph: GraphBackend,
 ) -> JobResponse:
-    """Start a crawl job. Returns 202 immediately; crawl runs in the background."""
-    session_factory = request.app.state.session_factory
-
+    """Start a crawl job. Returns 202 with the real job immediately; the crawl
+    runs in a dedicated worker thread (its own Proactor event loop) so Playwright
+    can spawn the browser subprocess even when the server runs under ``--reload``.
+    """
     config = CrawlerConfig(
         seed_username=body.seed_username,
         max_depth=body.max_depth,
@@ -42,36 +43,31 @@ async def create_job(
         proxy_urls=body.proxy_urls,
     )
 
-    crawler = AccountCrawler(
-        config=config,
-        session_factory=session_factory,
-        graph=graph,
-    )
-
-    asyncio.create_task(crawler.run(), name=f"crawl-{body.seed_username}")
-
-    # Yield once so the crawler can flush the initial job INSERT before we query.
-    await asyncio.sleep(0)
-
+    # Create the job row up front so we can return its real id (no synthetic
+    # placeholder that 404s when the client navigates to it). Capture id +
+    # response *before* committing, because commit expires ORM attributes.
     job_repo = JobRepository(session)
-    jobs = await job_repo.list_jobs(limit=1, offset=0)
-    if jobs:
-        return JobResponse.model_validate(jobs[0])
-
-    # Rare race: return a synthetic preview if the INSERT hasn't landed yet.
-    return JobResponse(
-        id=uuid.uuid4(),
+    job = await job_repo.create_job(
         seed_username=body.seed_username,
-        platform="twitter",
         max_depth=body.max_depth,
         max_accounts=body.max_accounts,
-        status="RUNNING",
-        accounts_scraped=0,
-        error_message=None,
-        created_at=datetime.now(timezone.utc),
-        started_at=None,
-        completed_at=None,
+        status=JobStatus.PENDING,
     )
+    # Load server-side defaults (created_at) so model_validate doesn't trigger
+    # an async lazy-load on an expired attribute.
+    await session.refresh(job)
+    job_response = JobResponse.model_validate(job)
+    job_id = job.id
+    await session.commit()  # persist before the worker thread reads the row
+
+    threading.Thread(
+        target=run_crawl_in_thread,
+        args=(config, graph, job_id),
+        name=f"crawl-{body.seed_username}",
+        daemon=True,
+    ).start()
+
+    return job_response
 
 
 @router.get("", response_model=JobListResponse)
