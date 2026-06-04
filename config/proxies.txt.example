@@ -1,0 +1,15 @@
+# Proxy list — copy to proxies.txt (gitignored) and populate with your proxies.
+# proxies.txt is NEVER committed — it may contain credentials.
+#
+# Supported formats (one per line):
+#   http://1.2.3.4:8080
+#   https://1.2.3.4:8080
+#   socks5://1.2.3.4:1080
+#   http://user:password@1.2.3.4:8080
+#
+# Lines starting with # are ignored.
+# Blank lines are ignored.
+# Malformed lines are skipped with a warning.
+#
+# Free proxy source (dev only, low reliability):
+#   config proxy refresh   — fetches from proxyscrape.com via CLI

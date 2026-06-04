@@ -1,0 +1,44 @@
+# Secrets / credentials — NEVER commit
+.env
+config/proxies.txt
+config/sessions/*
+!config/sessions/.gitkeep
+config/cookies.json
+
+# Data / databases
+data/
+*.db
+*.db-wal
+*.db-shm
+*.pkl
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Tool artifacts
+claude-resume.txt
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/
+graphify-out/

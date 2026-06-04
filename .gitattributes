@@ -1,0 +1,22 @@
+# Normalize line endings on commit; checkout as-is per OS
+* text=auto
+
+# Force LF for Python / config files so diffs stay clean cross-platform
+*.py text eol=lf
+*.toml text eol=lf
+*.cfg text eol=lf
+*.ini text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+*.json text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.env text eol=lf
+*.example text eol=lf
+*.sh text eol=lf
+
+# Binary — no line-ending translation
+*.png binary
+*.jpg binary
+*.pkl binary
+*.db binary
