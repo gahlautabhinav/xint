@@ -14,6 +14,29 @@ def auth() -> None:
 
 
 @auth.command()
+def revoke() -> None:
+	"""Delete the saved X/Twitter session (log out).
+
+	\b
+	After revoking, run 'osint login' or 'osint login --cookies' to log in
+	with a different account.
+	"""
+	session_path = Path("config/sessions/twitter_state.json")
+
+	if not session_path.exists():
+		console.print("[dim]No session to revoke.[/dim]")
+		return
+
+	try:
+		session_path.unlink()
+		console.print("[green]Session revoked[/green]")
+		console.print("[dim]Run [bold]osint login[/bold] to log in with a different account.[/dim]")
+	except OSError as exc:
+		console.print(f"[red]Failed to delete session:[/red] {exc}")
+		raise SystemExit(1) from exc
+
+
+@auth.command()
 def status() -> None:
 	"""Check if you're logged in with a saved X/Twitter session."""
 	session_path = Path("config/sessions/twitter_state.json")
