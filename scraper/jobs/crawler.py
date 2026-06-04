@@ -35,6 +35,12 @@ class CrawlerConfig:
     max_accounts: int = 500
     rate_profile_name: ProfileName = "moderate"
     proxy_urls: list[str] = field(default_factory=list)
+    # Scrape the following list (FOLLOWS edges) — the main network signal.
+    scrape_following: bool = True
+    max_following: int = 50
+    # Scrape the followers list (inbound FOLLOWS edges: follower → this account).
+    scrape_followers: bool = True
+    max_followers: int = 50
 
 
 def _proxies_from_urls(urls: list[str]) -> list[Proxy]:
@@ -147,7 +153,14 @@ class AccountCrawler:
                             proxy_url=proxy.url if proxy else None
                         ) as page:
                             result = await scrape_account(
-                                page, username, bucket=bucket, rate_profile=rate_profile
+                                page,
+                                username,
+                                bucket=bucket,
+                                rate_profile=rate_profile,
+                                scrape_following=config.scrape_following,
+                                max_following=config.max_following,
+                                scrape_followers=config.scrape_followers,
+                                max_followers=config.max_followers,
                             )
 
                         if proxy is not None:
@@ -223,8 +236,11 @@ class AccountCrawler:
         profile = result.profile
         now = datetime.now(timezone.utc)
 
-        # Collect tweet-derived edges: (handle, RelType)
+        # Collect edges: (handle, RelType). FOLLOWS comes from the following
+        # list; MENTIONS/REPLIES_TO from tweets. All become BFS frontier handles.
         mention_edges: list[tuple[str, RelType]] = []
+        for handle in result.following:
+            mention_edges.append((handle.lower(), RelType.FOLLOWS))
         for tweet in result.tweets:
             for handle in tweet.mentions:
                 mention_edges.append((handle.lower(), RelType.MENTIONS))
@@ -237,6 +253,17 @@ class AccountCrawler:
             if pair not in seen_edges:
                 seen_edges.add(pair)
                 deduped_edges.append(pair)
+
+        # Inbound followers: each follower --FOLLOWS--> this account (reversed).
+        self_handle = result.username.lower()
+        follower_handles: list[str] = []
+        seen_followers: set[str] = set()
+        for handle in result.followers:
+            h = handle.lower()
+            if h == self_handle or h in seen_followers:
+                continue
+            seen_followers.add(h)
+            follower_handles.append(h)
 
         async with self._sf() as session:
             account_repo = AccountRepository(session)
@@ -259,6 +286,11 @@ class AccountCrawler:
             for handle, rel_type in deduped_edges:
                 target = await account_repo.upsert(username=handle, platform="twitter")
                 await rel_repo.upsert(account.id, target.id, rel_type)
+                new_handles.append(handle)
+
+            for handle in follower_handles:
+                follower = await account_repo.upsert(username=handle, platform="twitter")
+                await rel_repo.upsert(follower.id, account.id, RelType.FOLLOWS)
                 new_handles.append(handle)
 
             for platform, handle in result.cross_platform.items():
@@ -289,6 +321,11 @@ class AccountCrawler:
             dst_id = make_node_id("twitter", handle)
             await self._graph.upsert_node(dst_id, ["Account"], {})
             await self._graph.upsert_edge(src_id, dst_id, rel_type.value, {"weight": 1.0})
+
+        for handle in follower_handles:
+            f_id = make_node_id("twitter", handle)
+            await self._graph.upsert_node(f_id, ["Account"], {})
+            await self._graph.upsert_edge(f_id, src_id, "FOLLOWS", {"weight": 1.0})
 
         for platform, handle in result.cross_platform.items():
             dst_id = make_node_id(platform, handle)

@@ -88,6 +88,7 @@ class TestScrapeAccount:
             patch("scraper.jobs.worker.safe_goto", new=AsyncMock(return_value=True)),
             patch("scraper.jobs.worker.wait_for_selector", new=AsyncMock(return_value=True)),
             patch("scraper.jobs.worker.human_delay", new=AsyncMock()),
+            patch("scraper.jobs.worker.scroll_page", new=AsyncMock()),
             patch("scraper.jobs.worker.extract_profile", new=AsyncMock(return_value=profile)),
             patch("scraper.jobs.worker.extract_tweets", new=AsyncMock(return_value=tweets)),
         ):
@@ -100,6 +101,7 @@ class TestScrapeAccount:
         assert result.profile.handle == "alice"
         assert result.tweets == tweets
         assert result.error is None
+        assert result.following == []  # not requested by default
 
     async def test_navigation_failure(self):
         page = AsyncMock()
@@ -173,6 +175,7 @@ class TestScrapeAccount:
             patch("scraper.jobs.worker.safe_goto", new=AsyncMock(return_value=True)),
             patch("scraper.jobs.worker.wait_for_selector", new=AsyncMock(return_value=True)),
             patch("scraper.jobs.worker.human_delay", new=AsyncMock()),
+            patch("scraper.jobs.worker.scroll_page", new=AsyncMock()),
             patch("scraper.jobs.worker.extract_profile", new=AsyncMock(return_value=profile)),
             patch("scraper.jobs.worker.extract_tweets", new=AsyncMock(return_value=[])),
         ):
@@ -182,6 +185,64 @@ class TestScrapeAccount:
 
         assert result.success is True
         assert result.cross_platform.get("github") == "alice-dev"
+
+    async def test_scrape_following_when_enabled(self):
+        page = AsyncMock()
+        bucket = _make_bucket()
+        profile = _make_profile("alice")
+        with (
+            patch("scraper.jobs.worker.safe_goto", new=AsyncMock(return_value=True)),
+            patch("scraper.jobs.worker.wait_for_selector", new=AsyncMock(return_value=True)),
+            patch("scraper.jobs.worker.human_delay", new=AsyncMock()),
+            patch("scraper.jobs.worker.scroll_page", new=AsyncMock()),
+            patch("scraper.jobs.worker.extract_profile", new=AsyncMock(return_value=profile)),
+            patch("scraper.jobs.worker.extract_tweets", new=AsyncMock(return_value=[])),
+            patch(
+                "scraper.jobs.worker.extract_following",
+                new=AsyncMock(return_value=["bob", "carol"]),
+            ),
+        ):
+            result = await scrape_account(
+                page,
+                "alice",
+                bucket=bucket,
+                rate_profile=_moderate_profile(),
+                scrape_following=True,
+                max_following=10,
+            )
+
+        assert result.success is True
+        assert result.following == ["bob", "carol"]
+        assert result.followers == []  # not requested
+
+    async def test_scrape_followers_when_enabled(self):
+        page = AsyncMock()
+        bucket = _make_bucket()
+        profile = _make_profile("alice")
+        with (
+            patch("scraper.jobs.worker.safe_goto", new=AsyncMock(return_value=True)),
+            patch("scraper.jobs.worker.wait_for_selector", new=AsyncMock(return_value=True)),
+            patch("scraper.jobs.worker.human_delay", new=AsyncMock()),
+            patch("scraper.jobs.worker.scroll_page", new=AsyncMock()),
+            patch("scraper.jobs.worker.extract_profile", new=AsyncMock(return_value=profile)),
+            patch("scraper.jobs.worker.extract_tweets", new=AsyncMock(return_value=[])),
+            patch(
+                "scraper.jobs.worker.extract_following",
+                new=AsyncMock(return_value=["dave", "erin"]),
+            ),
+        ):
+            result = await scrape_account(
+                page,
+                "alice",
+                bucket=bucket,
+                rate_profile=_moderate_profile(),
+                scrape_followers=True,
+                max_followers=10,
+            )
+
+        assert result.success is True
+        assert result.followers == ["dave", "erin"]
+        assert result.following == []  # not requested
 
 
 # ---------------------------------------------------------------------------
@@ -349,7 +410,7 @@ class TestAccountCrawler:
 
         scraped_usernames: list[str] = []
 
-        async def mock_scrape(page, username, *, bucket, rate_profile):
+        async def mock_scrape(page, username, *, bucket, rate_profile, **kwargs):
             scraped_usernames.append(username)
             if username == "alice":
                 return _success_result("alice", mentions=["bob"])
@@ -368,6 +429,73 @@ class TestAccountCrawler:
         assert "alice" in scraped_usernames
         assert "bob" in scraped_usernames
 
+    async def test_run_expands_via_following(self):
+        """Seed follows 'bob' → bob enqueued/scraped and a FOLLOWS edge stored."""
+        mock_factory, mock_job, mock_job_repo, mock_ar, mock_rr = _make_mock_session_factory()
+        pool_cm, mock_pool, mock_page = _make_mock_pool()
+        mock_graph = AsyncMock()
+        config = CrawlerConfig(seed_username="alice", max_depth=1, max_accounts=10)
+
+        scraped: list[str] = []
+
+        async def mock_scrape(page, username, *, bucket, rate_profile, **kwargs):
+            scraped.append(username)
+            if username == "alice":
+                result = _success_result("alice")
+                result.following = ["bob"]
+                return result
+            return _success_result(username)
+
+        with (
+            patch("scraper.jobs.crawler.BrowserPool", return_value=pool_cm),
+            patch("scraper.jobs.crawler.JobRepository", return_value=mock_job_repo),
+            patch("scraper.jobs.crawler.AccountRepository", return_value=mock_ar),
+            patch("scraper.jobs.crawler.RelationshipRepository", return_value=mock_rr),
+            patch("scraper.jobs.crawler.scrape_account", new=mock_scrape),
+        ):
+            crawler = AccountCrawler(config, mock_factory, mock_graph)
+            await crawler.run()
+
+        assert "alice" in scraped
+        assert "bob" in scraped
+        from storage.models.relationship import RelType
+
+        rel_types = [c.args[2] for c in mock_rr.upsert.call_args_list]
+        assert RelType.FOLLOWS in rel_types
+
+    async def test_run_expands_via_followers(self):
+        """A follower 'zoe' → zoe enqueued/scraped via an inbound FOLLOWS edge."""
+        mock_factory, mock_job, mock_job_repo, mock_ar, mock_rr = _make_mock_session_factory()
+        pool_cm, mock_pool, mock_page = _make_mock_pool()
+        mock_graph = AsyncMock()
+        config = CrawlerConfig(seed_username="alice", max_depth=1, max_accounts=10)
+
+        scraped: list[str] = []
+
+        async def mock_scrape(page, username, *, bucket, rate_profile, **kwargs):
+            scraped.append(username)
+            if username == "alice":
+                result = _success_result("alice")
+                result.followers = ["zoe"]
+                return result
+            return _success_result(username)
+
+        with (
+            patch("scraper.jobs.crawler.BrowserPool", return_value=pool_cm),
+            patch("scraper.jobs.crawler.JobRepository", return_value=mock_job_repo),
+            patch("scraper.jobs.crawler.AccountRepository", return_value=mock_ar),
+            patch("scraper.jobs.crawler.RelationshipRepository", return_value=mock_rr),
+            patch("scraper.jobs.crawler.scrape_account", new=mock_scrape),
+        ):
+            crawler = AccountCrawler(config, mock_factory, mock_graph)
+            await crawler.run()
+
+        assert "alice" in scraped
+        assert "zoe" in scraped
+        # an inbound FOLLOWS edge to the seed was recorded on the graph
+        edge_calls = [c.args for c in mock_graph.upsert_edge.call_args_list]
+        assert any(args[2] == "FOLLOWS" for args in edge_calls)
+
     async def test_run_respects_max_depth(self):
         """max_depth=0 → only seed scraped; mentions not enqueued."""
         mock_factory, mock_job, mock_job_repo, mock_ar, mock_rr = _make_mock_session_factory()
@@ -377,7 +505,7 @@ class TestAccountCrawler:
 
         scraped_usernames: list[str] = []
 
-        async def mock_scrape(page, username, *, bucket, rate_profile):
+        async def mock_scrape(page, username, *, bucket, rate_profile, **kwargs):
             scraped_usernames.append(username)
             return _success_result(username, mentions=["bob", "carol"])
 
@@ -403,7 +531,7 @@ class TestAccountCrawler:
 
         scraped_usernames: list[str] = []
 
-        async def mock_scrape(page, username, *, bucket, rate_profile):
+        async def mock_scrape(page, username, *, bucket, rate_profile, **kwargs):
             scraped_usernames.append(username)
             return _success_result(username, mentions=["bob"])
 
@@ -429,7 +557,7 @@ class TestAccountCrawler:
 
         scraped_usernames: list[str] = []
 
-        async def mock_scrape(page, username, *, bucket, rate_profile):
+        async def mock_scrape(page, username, *, bucket, rate_profile, **kwargs):
             scraped_usernames.append(username)
             if username == "alice":
                 # mentions bob twice (alice and bob both mention bob at depth 1)
