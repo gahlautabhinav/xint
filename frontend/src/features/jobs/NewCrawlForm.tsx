@@ -8,6 +8,8 @@ import type { JobCreate } from "@/lib/types";
 import { Pill } from "@/components/Pill";
 import { SelectField, TextField } from "@/components/Field";
 
+const ACCOUNT_PRESETS = [10, 25, 50, 100, 200, 500, 1000, 5000];
+
 const RATE_OPTIONS = [
   { value: "conservative", label: "Conservative — slowest, safest" },
   { value: "moderate", label: "Moderate — balanced" },
@@ -78,15 +80,33 @@ export function NewCrawlForm() {
           onChange={(e) => setDepth(Number(e.target.value))}
           options={[1, 2, 3, 4, 5].map((d) => ({ value: String(d), label: String(d) }))}
         />
-        <SelectField
-          label="Max accounts"
-          value={String(maxAccounts)}
-          onChange={(e) => setMaxAccounts(Number(e.target.value))}
-          options={[50, 100, 200, 500, 1000, 2000].map((n) => ({
-            value: String(n),
-            label: String(n),
-          }))}
-        />
+        <div className="field">
+          <label className="field__label">Max accounts</label>
+          <input
+            type="number"
+            className="input"
+            min={1}
+            max={10000}
+            value={maxAccounts}
+            onChange={(e) => {
+              const v = parseInt(e.target.value, 10);
+              if (!isNaN(v) && v >= 1) setMaxAccounts(v);
+            }}
+          />
+          <div className="crawlform__presets">
+            {ACCOUNT_PRESETS.map((n) => (
+              <button
+                key={n}
+                type="button"
+                className={`crawlform__preset${maxAccounts === n ? " crawlform__preset--active" : ""}`}
+                onClick={() => setMaxAccounts(n)}
+              >
+                {n >= 1000 ? `${n / 1000}k` : n}
+              </button>
+            ))}
+          </div>
+          <span className="field__hint">Type any value or pick a preset.</span>
+        </div>
         <SelectField
           label="Rate profile"
           value={rate}
