@@ -8,7 +8,7 @@ Only the latest commit on `main` is actively maintained.
 
 **Do not open a public GitHub issue for security vulnerabilities.**
 
-Email: **ai@globalvoxinc.com**
+Email: **abhi.gahlaut69@gmail.com**
 
 Include:
 - Description of the vulnerability

@@ -14,7 +14,7 @@ communication representing this project.
 
 ## Reporting
 
-Report problems to the maintainer at **ai@globalvoxinc.com**. Reports are
+Report problems to the maintainer at **abhi.gahlaut69@gmail.com**. Reports are
 reviewed confidentially.
 
 ## Attribution
