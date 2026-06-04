@@ -147,6 +147,10 @@ class AccountCrawler:
                         continue
                     visited.add(username)
 
+                    await self._emit(
+                        job_id, "account_started", {"username": username, "depth": depth}
+                    )
+
                     try:
                         proxy = rotator.next()
                         async with pool.page_context(
@@ -172,6 +176,25 @@ class AccountCrawler:
                         new_handles = await self._store(result, depth, job_id)
                         if result.success:
                             accounts_scraped += 1
+                            await self._record_progress(
+                                job_id,
+                                accounts_scraped,
+                                {
+                                    "username": username,
+                                    "depth": depth,
+                                    "followers": result.profile.follower_count or 0,
+                                    "following": len(result.following),
+                                    "followers_n": len(result.followers),
+                                    "mentions": sum(len(t.mentions) for t in result.tweets),
+                                    "new_edges": len(new_handles),
+                                },
+                            )
+                        else:
+                            await self._emit(
+                                job_id,
+                                "account_failed",
+                                {"username": username, "depth": depth, "error": result.error},
+                            )
 
                         if depth < config.max_depth:
                             for handle in new_handles:
@@ -185,6 +208,14 @@ class AccountCrawler:
                         logger.warning(
                             "Skipping %r (depth=%d) after error: %s", username, depth, exc
                         )
+                        try:
+                            await self._emit(
+                                job_id,
+                                "account_failed",
+                                {"username": username, "depth": depth, "error": str(exc)},
+                            )
+                        except Exception:
+                            logger.debug("Could not emit account_failed for %r", username)
 
         except Exception as exc:
             logger.error("Crawler run failed: %s", exc)
@@ -212,6 +243,39 @@ class AccountCrawler:
             "Crawl %s: %s, scraped %d accounts", job_id, status.value, accounts_scraped
         )
         return job_id
+
+    async def _emit(
+        self,
+        job_id: uuid.UUID,
+        event_type: str,
+        payload: dict[str, object] | None = None,
+    ) -> None:
+        """Emit a single job event in its own committed session.
+
+        Cross-engine visibility (the API reads via a separate engine on the same
+        SQLite WAL file) requires a COMMIT, not just a flush — so each live event
+        opens, emits, and commits.
+        """
+        async with self._sf() as session:
+            await JobRepository(session).emit_event(job_id, event_type, payload)
+            await session.commit()
+
+    async def _record_progress(
+        self,
+        job_id: uuid.UUID,
+        accounts_scraped: int,
+        payload: dict[str, object],
+    ) -> None:
+        """Bump the live ``accounts_scraped`` counter and emit ``account_scraped``.
+
+        Both writes share one session/commit so the progress bar and event log
+        advance together (and we pay one commit per account, not two).
+        """
+        async with self._sf() as session:
+            repo = JobRepository(session)
+            await repo.update_job(job_id, accounts_scraped=accounts_scraped)
+            await repo.emit_event(job_id, "account_scraped", payload)
+            await session.commit()
 
     async def _store(
         self,

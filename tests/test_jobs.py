@@ -373,8 +373,9 @@ class TestAccountCrawler:
             await crawler.run()
 
         mock_job_repo.create_job.assert_called_once()
-        mock_job_repo.update_job.assert_called_once()
-        # update_job should set status=COMPLETED
+        # update_job is called per-account (live counter) AND at finalize; the
+        # finalize call (last) sets status=COMPLETED.
+        assert mock_job_repo.update_job.called
         _, kwargs = mock_job_repo.update_job.call_args
         from storage.models.job import JobStatus
         assert kwargs["status"] == JobStatus.COMPLETED
@@ -626,3 +627,59 @@ class TestAccountCrawler:
         first_call = mock_graph.upsert_node.call_args_list[0]
         node_id = first_call[0][0]
         assert node_id == "twitter:@alice"
+
+    async def test_run_emits_live_progress(self):
+        """Live events + counter: account_started/account_scraped emitted and the
+        accounts_scraped counter is bumped per-account (before finalize)."""
+        mock_factory, mock_job, mock_job_repo, mock_ar, mock_rr = _make_mock_session_factory()
+        pool_cm, mock_pool, mock_page = _make_mock_pool()
+        mock_graph = AsyncMock()
+        config = CrawlerConfig(seed_username="alice", max_depth=0, max_accounts=1)
+
+        with (
+            patch("scraper.jobs.crawler.BrowserPool", return_value=pool_cm),
+            patch("scraper.jobs.crawler.JobRepository", return_value=mock_job_repo),
+            patch("scraper.jobs.crawler.AccountRepository", return_value=mock_ar),
+            patch("scraper.jobs.crawler.RelationshipRepository", return_value=mock_rr),
+            patch(
+                "scraper.jobs.crawler.scrape_account",
+                new=AsyncMock(return_value=_success_result("alice", mentions=["bob"])),
+            ),
+        ):
+            crawler = AccountCrawler(config, mock_factory, mock_graph)
+            await crawler.run()
+
+        event_types = [c.args[1] for c in mock_job_repo.emit_event.call_args_list]
+        assert "job_started" in event_types
+        assert "account_started" in event_types
+        assert "account_scraped" in event_types
+        assert "job_finished" in event_types
+
+        # A per-account counter bump (accounts_scraped, no status) precedes finalize.
+        assert any(
+            c.kwargs.get("accounts_scraped") and "status" not in c.kwargs
+            for c in mock_job_repo.update_job.call_args_list
+        )
+
+    async def test_run_emits_account_failed_on_soft_failure(self):
+        """A failed scrape (success=False) emits an account_failed event."""
+        mock_factory, mock_job, mock_job_repo, mock_ar, mock_rr = _make_mock_session_factory()
+        pool_cm, mock_pool, mock_page = _make_mock_pool()
+        mock_graph = AsyncMock()
+        config = CrawlerConfig(seed_username="alice", max_depth=0, max_accounts=1)
+
+        with (
+            patch("scraper.jobs.crawler.BrowserPool", return_value=pool_cm),
+            patch("scraper.jobs.crawler.JobRepository", return_value=mock_job_repo),
+            patch("scraper.jobs.crawler.AccountRepository", return_value=mock_ar),
+            patch("scraper.jobs.crawler.RelationshipRepository", return_value=mock_rr),
+            patch(
+                "scraper.jobs.crawler.scrape_account",
+                new=AsyncMock(return_value=_failed_result("alice")),
+            ),
+        ):
+            crawler = AccountCrawler(config, mock_factory, mock_graph)
+            await crawler.run()
+
+        event_types = [c.args[1] for c in mock_job_repo.emit_event.call_args_list]
+        assert "account_failed" in event_types
