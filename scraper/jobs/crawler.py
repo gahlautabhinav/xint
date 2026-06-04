@@ -354,18 +354,33 @@ class AccountCrawler:
             account_repo = AccountRepository(session)
             rel_repo = RelationshipRepository(session)
 
+            # Collect tweet geo locations (deduplicated, non-null only)
+            geo_locations = list(dict.fromkeys(
+                tw.geo_location for tw in result.tweets if tw.geo_location
+            ))
+
             account = await account_repo.upsert(
                 username=result.username,
                 platform="twitter",
                 display_name=profile.display_name,
                 bio=profile.bio,
                 website=profile.website,
+                location=profile.location,
+                profile_image_url=profile.profile_image_url,
                 followers_count=profile.follower_count or 0,
                 following_count=profile.following_count or 0,
+                tweet_count=profile.tweet_count or 0,
                 is_verified=profile.is_verified,
                 scraped_at=now,
                 scrape_depth=depth,
-                raw_data={"success": result.success, "error": result.error},
+                raw_data={
+                    "success": result.success,
+                    "error": result.error,
+                    "join_date": profile.join_date,
+                    "emails": result.contacts.get("emails", []),
+                    "phones": result.contacts.get("phones", []),
+                    "geo_locations": geo_locations,
+                },
             )
 
             for handle, rel_type in deduped_edges:

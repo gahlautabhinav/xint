@@ -44,7 +44,11 @@ class ProfileData:
     website: str | None
     follower_count: int | None = None
     following_count: int | None = None
+    tweet_count: int | None = None
     is_verified: bool = False
+    location: str | None = None
+    join_date: str | None = None       # raw string e.g. "June 2012"
+    profile_image_url: str | None = None
 
 
 @dataclass
@@ -56,6 +60,7 @@ class TweetData:
     hashtags: list[str] = field(default_factory=list)
     reply_to: str | None = None
     quote_url: str | None = None
+    geo_location: str | None = None    # visible location chip when user tagged location
 
 
 # ---------------------------------------------------------------------------
@@ -96,6 +101,36 @@ _PROFILE_JS = """
             followers_raw = val;
     }
 
+    // Location + join date live in UserProfileHeader_Items
+    const headerItems = document.querySelector('[data-testid="UserProfileHeader_Items"]');
+    let location = null, join_date = null;
+    if (headerItems) {
+        const fullText = headerItems.innerText || '';
+        const joinM = fullText.match(/Joined\s+([A-Za-z]+ \d{4})/);
+        if (joinM) join_date = joinM[1];
+        // Location: first non-empty span before "Joined" text (heuristic)
+        const spans = Array.from(headerItems.querySelectorAll('span[dir]'));
+        for (const s of spans) {
+            const t = s.innerText.trim();
+            if (t && t.length > 0 && !t.startsWith('Joined') && !t.includes('·')) {
+                location = t;
+                break;
+            }
+        }
+    }
+
+    // Profile image (highest-res src available)
+    const avatarImg = document.querySelector('[data-testid="UserAvatar"] img');
+    const profile_image_url = avatarImg ? avatarImg.getAttribute('src') : null;
+
+    // Tweet count from profile stats row
+    const tweetStatLink = document.querySelector('a[href$="/with_replies"], a[href*="/tweets"]');
+    let tweets_raw = null;
+    if (tweetStatLink) {
+        const span = tweetStatLink.querySelector('span');
+        tweets_raw = span ? span.innerText.trim() : null;
+    }
+
     return {
         handle,
         display_name,
@@ -104,6 +139,10 @@ _PROFILE_JS = """
         followers_raw,
         following_raw,
         is_verified: !!document.querySelector('[data-testid="icon-verified"]'),
+        location,
+        join_date,
+        profile_image_url,
+        tweets_raw,
     };
 }
 """
@@ -138,12 +177,18 @@ _TWEETS_JS = r"""
             }
         }
 
+        // Geo chip — Twitter deprecated public tagging 2019 but some tweets still show it
+        const geoEl = tw.querySelector('[data-testid="tweetGeoTag"]') ||
+                      tw.querySelector('a[href*="maps.google"], a[href*="place"]');
+        const geo_location = geoEl ? geoEl.innerText.trim() : null;
+
         return {
             tweet_id: idM ? idM[1] : null,
             text,
             timestamp: timeEl ? timeEl.getAttribute('datetime') : null,
             quote_url: quoteLink ? quoteLink.getAttribute('href') : null,
             reply_to,
+            geo_location,
         };
     });
 }
@@ -233,7 +278,11 @@ async def extract_profile(page: Page) -> ProfileData:
         website=raw.get("website"),
         follower_count=_parse_count(raw.get("followers_raw")),
         following_count=_parse_count(raw.get("following_raw")),
+        tweet_count=_parse_count(raw.get("tweets_raw")),
         is_verified=bool(raw.get("is_verified", False)),
+        location=raw.get("location"),
+        join_date=raw.get("join_date"),
+        profile_image_url=raw.get("profile_image_url"),
     )
 
 
@@ -257,6 +306,7 @@ async def extract_tweets(page: Page) -> list[TweetData]:
                 hashtags=_HASHTAG_RE.findall(text),
                 reply_to=raw.get("reply_to"),
                 quote_url=raw.get("quote_url"),
+                geo_location=raw.get("geo_location") or None,
             )
         )
     return tweets

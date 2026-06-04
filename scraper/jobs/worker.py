@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass, field
 
+import httpx
 from playwright.async_api import Page
 
 from scraper.browser.page import human_delay, safe_goto, scroll_page, wait_for_selector
-from scraper.extractors.cross_platform import extract_all_links
+from scraper.extractors.cross_platform import extract_all_links, extract_contacts
 from scraper.extractors.twitter import (
     ProfileData,
     TweetData,
@@ -18,6 +20,31 @@ from scraper.ratelimit.profiles import RateProfile
 from scraper.ratelimit.token_bucket import TokenBucket
 
 logger = logging.getLogger(__name__)
+
+_TCO_RE = re.compile(r"https?://t\.co/\S+", re.IGNORECASE)
+
+
+async def _expand_tco(url: str) -> str:
+    """Follow a t.co short link and return the final URL. Returns original on failure."""
+    try:
+        async with httpx.AsyncClient(follow_redirects=True, timeout=5.0) as client:
+            r = await client.head(url)
+            return str(r.url)
+    except Exception:
+        return url
+
+
+async def _expand_tco_in_texts(texts: list[str]) -> list[str]:
+    """Replace t.co links in text list with their expanded destinations."""
+    expanded = []
+    for text in texts:
+        matches = _TCO_RE.findall(text)
+        for short in matches:
+            real = await _expand_tco(short)
+            text = text.replace(short, real)
+        expanded.append(text)
+    return expanded
+
 
 _PROFILE_SELECTOR = '[data-testid="UserName"]'
 _TWEET_SELECTOR = '[data-testid="tweet"]'
@@ -32,6 +59,7 @@ class ScrapeResult:
     profile: ProfileData
     tweets: list[TweetData] = field(default_factory=list)
     cross_platform: dict[str, str] = field(default_factory=dict)
+    contacts: dict[str, list[str]] = field(default_factory=dict)  # emails, phones
     following: list[str] = field(default_factory=list)
     followers: list[str] = field(default_factory=list)
     success: bool = True
@@ -126,15 +154,21 @@ async def scrape_account(
         except Exception as exc:
             logger.warning("scrape_account(%r) followers error: %s", username, exc)
 
-    texts = [t for t in [profile.bio, profile.website] if t is not None]
-    texts += [tw.text for tw in tweets]
+    raw_texts = [t for t in [profile.bio, profile.website] if t is not None]
+    raw_texts += [tw.text for tw in tweets]
+
+    # Expand t.co short links so cross-platform + contact detection works on real URLs
+    texts = await _expand_tco_in_texts(raw_texts)
+
     cross_platform = extract_all_links(texts)
+    contacts = extract_contacts(texts)
 
     return ScrapeResult(
         username=username,
         profile=profile,
         tweets=tweets,
         cross_platform=cross_platform,
+        contacts=contacts,
         following=following,
         followers=followers,
         success=True,
