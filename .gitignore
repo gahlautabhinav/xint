@@ -51,6 +51,8 @@ claude-resume.txt
 CLAUDE.md
 *.aider*
 .aider.tags.cache.v*/
+*.py.md
+.agents/
 
 # OS / editor
 .DS_Store
