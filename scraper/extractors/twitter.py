@@ -122,15 +122,28 @@ _TWEETS_JS = r"""
         const quoteEl = tw.querySelector('[data-testid="quoteTweet"]');
         const quoteLink = quoteEl ? quoteEl.querySelector('a[href*="/status/"]') : null;
 
-        const socialCtx = tw.querySelector('[data-testid="socialContext"]');
-        const replyM = socialCtx ? socialCtx.innerText.match(/@(\w+)/) : null;
+        // "Replying to @handle" appears as a link with href="/handle" inside a
+        // span/div whose text contains "Replying to". socialContext is for
+        // "Pinned tweet" etc. — wrong selector. Walk all links in the tweet card.
+        let reply_to = null;
+        const allSpans = Array.from(tw.querySelectorAll('span'));
+        const replyingSpan = allSpans.find(s => s.innerText.trim() === 'Replying to');
+        if (replyingSpan) {
+            const replyLink = replyingSpan.parentElement
+                ? replyingSpan.parentElement.querySelector('a[href^="/"]')
+                : null;
+            if (replyLink) {
+                const m = (replyLink.getAttribute('href') || '').match(/^\/([A-Za-z0-9_]{1,15})$/);
+                if (m) reply_to = m[1];
+            }
+        }
 
         return {
             tweet_id: idM ? idM[1] : null,
             text,
             timestamp: timeEl ? timeEl.getAttribute('datetime') : null,
             quote_url: quoteLink ? quoteLink.getAttribute('href') : null,
-            reply_to: replyM ? replyM[1] : null,
+            reply_to,
         };
     });
 }

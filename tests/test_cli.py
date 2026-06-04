@@ -123,7 +123,7 @@ def test_crawl_invokes_crawler(runner: CliRunner) -> None:
 def test_crawl_options(runner: CliRunner) -> None:
     captured: dict = {}
 
-    async def fake_do_crawl(username, depth, max_accounts, rate_profile, proxy_file):
+    async def fake_do_crawl(username, depth, max_accounts, max_following, max_followers, rate_profile, proxy_file):
         captured.update(
             username=username,
             depth=depth,

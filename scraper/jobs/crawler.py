@@ -326,6 +326,11 @@ class AccountCrawler:
                 mention_edges.append((handle.lower(), RelType.MENTIONS))
             if tweet.reply_to:
                 mention_edges.append((tweet.reply_to.lower(), RelType.REPLIES_TO))
+            if tweet.quote_url:
+                # quote_url is /username/status/12345 — extract username
+                parts = tweet.quote_url.strip("/").split("/")
+                if parts and parts[0]:
+                    mention_edges.append((parts[0].lower(), RelType.QUOTE_TWEETS))
         # Deduplicate (handle, rel_type) pairs preserving insertion order
         seen_edges: set[tuple[str, RelType]] = set()
         deduped_edges: list[tuple[str, RelType]] = []
