@@ -249,6 +249,76 @@ class TestCreateJob:
         assert r.status_code == 422
 
 
+async def _make_job(session_factory, status: JobStatus) -> CrawlJob:
+    async with session_factory() as session:
+        job = await JobRepository(session).create_job(
+            seed_username="runner",
+            max_depth=1,
+            max_accounts=10,
+            status=status,
+        )
+        await session.commit()
+        return job
+
+
+# ---------------------------------------------------------------------------
+# POST /jobs/{id}/cancel
+# ---------------------------------------------------------------------------
+
+
+class TestCancelJob:
+    async def test_cancel_running(self, client: AsyncClient, session_factory):
+        job = await _make_job(session_factory, JobStatus.RUNNING)
+        r = await client.post(f"/jobs/{job.id}/cancel")
+        assert r.status_code == 202
+        assert r.json()["status"] == "CANCELLED"
+
+        async with session_factory() as session:
+            refreshed = await JobRepository(session).get_job(job.id)
+        assert refreshed is not None
+        assert refreshed.status == JobStatus.CANCELLED
+
+    async def test_cancel_terminal_conflict(self, client: AsyncClient, seed_job: CrawlJob):
+        r = await client.post(f"/jobs/{seed_job.id}/cancel")
+        assert r.status_code == 409
+
+    async def test_cancel_not_found(self, client: AsyncClient):
+        r = await client.post(f"/jobs/{uuid.uuid4()}/cancel")
+        assert r.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# DELETE /jobs/{id}
+# ---------------------------------------------------------------------------
+
+
+class TestDeleteJob:
+    async def test_delete_terminal_removes_job_and_events(
+        self, client: AsyncClient, seed_job: CrawlJob, session_factory
+    ):
+        async with session_factory() as session:
+            repo = JobRepository(session)
+            await repo.emit_event(seed_job.id, "account_scraped", {"username": "x"})
+            await session.commit()
+
+        r = await client.delete(f"/jobs/{seed_job.id}")
+        assert r.status_code == 204
+
+        async with session_factory() as session:
+            repo = JobRepository(session)
+            assert await repo.get_job(seed_job.id) is None
+            assert await repo.get_events_since(seed_job.id, 0) == []
+
+    async def test_delete_running_conflict(self, client: AsyncClient, session_factory):
+        job = await _make_job(session_factory, JobStatus.RUNNING)
+        r = await client.delete(f"/jobs/{job.id}")
+        assert r.status_code == 409
+
+    async def test_delete_not_found(self, client: AsyncClient):
+        r = await client.delete(f"/jobs/{uuid.uuid4()}")
+        assert r.status_code == 404
+
+
 # ---------------------------------------------------------------------------
 # GET /accounts
 # ---------------------------------------------------------------------------

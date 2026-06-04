@@ -138,6 +138,7 @@ class AccountCrawler:
 
         status = JobStatus.COMPLETED
         error_msg: str | None = None
+        cancelled = False
 
         try:
             async with BrowserPool(self._bcfg) as pool:
@@ -146,6 +147,16 @@ class AccountCrawler:
                     if username in visited:
                         continue
                     visited.add(username)
+
+                    # Cooperative cancellation: the API flips the job's status to
+                    # CANCELLED; we notice at the next iteration boundary and stop
+                    # cleanly (the in-flight account, if any, has already finished).
+                    async with self._sf() as session:
+                        current = await JobRepository(session).get_job(job_id)
+                        cancel_now = current is None or current.status == JobStatus.CANCELLED
+                    if cancel_now:
+                        cancelled = True
+                        break
 
                     await self._emit(
                         job_id, "account_started", {"username": username, "depth": depth}
@@ -221,6 +232,11 @@ class AccountCrawler:
             logger.error("Crawler run failed: %s", exc)
             status = JobStatus.FAILED
             error_msg = str(exc)
+
+        # A cooperative cancel wins over a clean completion, but never masks a
+        # hard failure (FAILED stays FAILED).
+        if cancelled and status != JobStatus.FAILED:
+            status = JobStatus.CANCELLED
 
         # Finalize job
         async with self._sf() as session:

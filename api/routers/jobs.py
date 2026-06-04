@@ -98,6 +98,55 @@ async def get_job(
     return JobResponse.model_validate(job)
 
 
+@router.post(
+    "/{job_id}/cancel",
+    status_code=status.HTTP_202_ACCEPTED,
+    response_model=JobResponse,
+)
+async def cancel_job(
+    job_id: uuid.UUID,
+    _key: ApiKeyCheck,
+    session: DbSession,
+) -> JobResponse:
+    """Cooperatively cancel a running/pending crawl.
+
+    Flips the job's status to CANCELLED; the crawl worker notices at its next
+    BFS iteration boundary and stops cleanly. No-op-rejects (409) a job that
+    has already reached a terminal state.
+    """
+    job_repo = JobRepository(session)
+    job = await job_repo.get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+    if job.status not in (JobStatus.PENDING, JobStatus.RUNNING):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Job is {job.status.value}; only running jobs can be cancelled",
+        )
+    updated = await job_repo.update_job(job_id, status=JobStatus.CANCELLED)
+    assert updated is not None  # get_job above confirmed it exists
+    return JobResponse.model_validate(updated)
+
+
+@router.delete("/{job_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_job(
+    job_id: uuid.UUID,
+    _key: ApiKeyCheck,
+    session: DbSession,
+) -> None:
+    """Delete a job and its events. Running/pending jobs must be stopped first."""
+    job_repo = JobRepository(session)
+    job = await job_repo.get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+    if job.status in (JobStatus.PENDING, JobStatus.RUNNING):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Job is running; cancel (stop) it before deleting",
+        )
+    await job_repo.delete_job(job_id)
+
+
 @router.get("/{job_id}/events", response_model=JobEventsResponse)
 async def get_job_events(
     job_id: uuid.UUID,

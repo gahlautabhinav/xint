@@ -683,3 +683,33 @@ class TestAccountCrawler:
 
         event_types = [c.args[1] for c in mock_job_repo.emit_event.call_args_list]
         assert "account_failed" in event_types
+
+    async def test_run_cancelled_stops_and_finalizes(self):
+        """Status flipped to CANCELLED → crawler breaks before scraping and
+        finalizes the job as CANCELLED."""
+        from storage.models.job import JobStatus
+
+        mock_factory, mock_job, mock_job_repo, mock_ar, mock_rr = _make_mock_session_factory()
+        pool_cm, mock_pool, mock_page = _make_mock_pool()
+        mock_graph = AsyncMock()
+        config = CrawlerConfig(seed_username="alice", max_depth=1, max_accounts=10)
+
+        cancelled_job = MagicMock()
+        cancelled_job.status = JobStatus.CANCELLED
+        mock_job_repo.get_job = AsyncMock(return_value=cancelled_job)
+
+        mock_scrape = AsyncMock(return_value=_success_result("alice"))
+        with (
+            patch("scraper.jobs.crawler.BrowserPool", return_value=pool_cm),
+            patch("scraper.jobs.crawler.JobRepository", return_value=mock_job_repo),
+            patch("scraper.jobs.crawler.AccountRepository", return_value=mock_ar),
+            patch("scraper.jobs.crawler.RelationshipRepository", return_value=mock_rr),
+            patch("scraper.jobs.crawler.scrape_account", new=mock_scrape),
+        ):
+            crawler = AccountCrawler(config, mock_factory, mock_graph)
+            await crawler.run()
+
+        # Cancelled before any account was scraped.
+        mock_scrape.assert_not_called()
+        _, kwargs = mock_job_repo.update_job.call_args
+        assert kwargs["status"] == JobStatus.CANCELLED
