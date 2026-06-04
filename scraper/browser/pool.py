@@ -5,6 +5,7 @@ import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from playwright.async_api import Browser, Page, Playwright, async_playwright
@@ -41,6 +42,10 @@ class BrowserConfig:
     default_timeout_ms: int = 30_000
     viewport_width: int = 1280
     viewport_height: int = 720
+    # Path to a Playwright storage_state JSON (cookies + localStorage) saved by
+    # `xint login`. When set and present, every context loads it so scraping is
+    # authenticated. None / missing file → anonymous (logged-out) scraping.
+    storage_state_path: str | None = None
 
 
 class BrowserPool:
@@ -102,6 +107,10 @@ class BrowserPool:
             }
             if proxy_url:
                 ctx_opts["proxy"] = {"server": proxy_url}
+            # Load a saved login session so scraping is authenticated.
+            state_path = self._config.storage_state_path
+            if state_path and Path(state_path).exists():
+                ctx_opts["storage_state"] = state_path
 
             ctx = await self._browser.new_context(**ctx_opts)
             ctx.set_default_timeout(self._config.default_timeout_ms)

@@ -48,6 +48,7 @@ async def _do_crawl(
     from graph.backends.networkx_backend import NetworkxBackend
     from scraper.jobs.crawler import AccountCrawler, CrawlerConfig
     from scraper.proxy.loader import load_from_file
+    from scraper.session import authed_browser_config, has_twitter_session
     from storage.models.job import CrawlJob, JobStatus
     from storage.repositories.job_repo import JobRepository
 
@@ -80,8 +81,13 @@ async def _do_crawl(
         f"[bold]Crawling @{username}[/bold]  "
         f"depth={resolved_depth}  max={resolved_max}  rate={resolved_rate}"
     )
+    if not has_twitter_session():
+        console.print(
+            "[yellow]No saved X session — anonymous scraping returns little data. "
+            "Run `xint login` first.[/yellow]"
+        )
 
-    crawler = AccountCrawler(config, factory, graph_backend)
+    crawler = AccountCrawler(config, factory, graph_backend, browser_config=authed_browser_config())
 
     with Progress(
         SpinnerColumn(),
