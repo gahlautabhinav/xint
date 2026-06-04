@@ -28,7 +28,7 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
-          cytoscape: ["cytoscape", "cytoscape-fcose"],
+          cytoscape: ["cytoscape", "cytoscape-cola"],
         },
       },
     },

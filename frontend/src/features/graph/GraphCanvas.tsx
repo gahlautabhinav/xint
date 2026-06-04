@@ -1,11 +1,11 @@
 import { useEffect, useRef } from "react";
-import cytoscape, { type Core, type ElementDefinition } from "cytoscape";
-import fcose from "cytoscape-fcose";
+import cytoscape, { type Core, type ElementDefinition, type Layouts } from "cytoscape";
+import cola from "cytoscape-cola";
 import { buildStylesheet } from "./cytoStyle";
 
 let registered = false;
 if (!registered) {
-  cytoscape.use(fcose);
+  cytoscape.use(cola);
   registered = true;
 }
 
@@ -22,21 +22,38 @@ interface GraphCanvasProps {
   onReady?: (cy: Core) => void;
 }
 
-function layoutOptions(randomize: boolean, animate: boolean) {
+// Force-directed layout via cola. `infinite:false` settles within
+// maxSimulationTime then stops, so a settled graph costs nothing.
+function colaBounded(randomize: boolean, fit: boolean, animate: boolean) {
   return {
-    name: "fcose",
-    quality: "default",
-    randomize,
+    name: "cola",
     animate,
-    animationDuration: 480,
-    animationEasing: "ease-out",
-    fit: true,
+    randomize,
+    fit,
     padding: 48,
-    nodeSeparation: 95,
-    idealEdgeLength: 95,
-    nodeRepulsion: 6500,
-    gravity: 0.25,
-    numIter: 2500,
+    maxSimulationTime: 2000,
+    convergenceThreshold: 0.01,
+    nodeSpacing: 14,
+    edgeLength: 110,
+    avoidOverlap: true,
+    handleDisconnected: true,
+    infinite: false,
+  } as unknown as cytoscape.LayoutOptions;
+}
+
+// Live simulation kicked while a node is being dragged — neighbours repel and
+// relax in real time (Obsidian-like). Runs only for the duration of the drag
+// (started on grab, stopped on free), so the perpetual loop is user-bounded.
+function colaLive(animate: boolean) {
+  return {
+    name: "cola",
+    animate,
+    fit: false,
+    infinite: true,
+    nodeSpacing: 14,
+    edgeLength: 110,
+    avoidOverlap: true,
+    handleDisconnected: true,
   } as unknown as cytoscape.LayoutOptions;
 }
 
@@ -54,10 +71,29 @@ export function GraphCanvas({
 }: GraphCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const cyRef = useRef<Core | null>(null);
+  const layoutRef = useRef<Layouts | null>(null);
   const firstLayoutDone = useRef(false);
   // Keep latest callbacks in refs so the cy event handlers (bound once) stay current.
   const handlers = useRef({ onSelectNode, onExpandNode });
   handlers.current = { onSelectNode, onExpandNode };
+  // Mirror reducedMotion into a ref so the once-bound drag handlers read it live.
+  const rmRef = useRef(reducedMotion);
+  rmRef.current = reducedMotion;
+
+  // Stable across renders; reads cy/layout from refs at call time. Always stops
+  // the prior layout before starting a new one so re-runs never stack (the real
+  // guard against a layout "restart storm" on rapid expands).
+  const runLayout = useRef((opts: cytoscape.LayoutOptions) => {
+    // Stop any prior layout FIRST — including a still-running infinite drag sim —
+    // before the empty-graph bail, so a stale simulation can never survive.
+    layoutRef.current?.stop();
+    layoutRef.current = null;
+    const cy = cyRef.current;
+    if (!cy || cy.elements().empty()) return;
+    const l = cy.layout(opts);
+    layoutRef.current = l;
+    l.run();
+  }).current;
 
   // ── Init cytoscape once ────────────────────────────────────────────────
   useEffect(() => {
@@ -96,9 +132,20 @@ export function GraphCanvas({
       if (el) el.style.cursor = "default";
     });
 
+    // Live-on-drag: start a continuous cola sim while a node is held so the
+    // neighbourhood repels/relaxes in real time, then settle + stop on release.
+    cy.on("grab", "node", () => {
+      if (rmRef.current) return; // reduced motion → no live sim
+      runLayout(colaLive(true));
+    });
+    cy.on("free", "node", () => {
+      runLayout(colaBounded(false, false, !rmRef.current));
+    });
+
     onReady?.(cy);
 
     return () => {
+      layoutRef.current?.stop();
       cy.destroy();
       cyRef.current = null;
     };
@@ -133,9 +180,8 @@ export function GraphCanvas({
 
     if (newOnes.length === 0) return;
 
-    const animate = !reducedMotion;
     const randomize = !firstLayoutDone.current;
-    cy.layout(layoutOptions(randomize, animate)).run();
+    runLayout(colaBounded(randomize, true, !reducedMotion));
     firstLayoutDone.current = true;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [elements, reducedMotion]);
@@ -187,9 +233,7 @@ export function GraphCanvas({
   }, [fitSignal]);
 
   useEffect(() => {
-    const cy = cyRef.current;
-    if (!cy || cy.elements().empty()) return;
-    cy.layout(layoutOptions(false, !reducedMotion)).run();
+    runLayout(colaBounded(false, true, !reducedMotion));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [relayoutSignal]);
 
