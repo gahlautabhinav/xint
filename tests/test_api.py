@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import AsyncGenerator
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -215,12 +215,9 @@ class TestGetJobEvents:
 
 class TestCreateJob:
     async def test_creates_job(self, client: AsyncClient, session_factory):
-        with patch("api.routers.jobs.AccountCrawler") as MockCrawler:
-            mock_instance = MagicMock()
-            mock_run = AsyncMock(return_value=uuid.uuid4())
-            mock_instance.run = mock_run
-            MockCrawler.return_value = mock_instance
-
+        # Patch Thread so no real browser/crawl thread spawns; we only verify
+        # the endpoint persists a real job and hands it to the worker.
+        with patch("api.routers.jobs.threading.Thread") as MockThread:
             r = await client.post(
                 "/jobs",
                 json={"seed_username": "elonmusk", "max_depth": 1, "max_accounts": 10},
@@ -230,6 +227,15 @@ class TestCreateJob:
         data = r.json()
         assert data["seed_username"] == "elonmusk"
         assert data["status"] in ("RUNNING", "COMPLETED", "PENDING")
+        MockThread.assert_called_once()
+        MockThread.return_value.start.assert_called_once()
+
+        # The returned id must be a real, persisted job (no synthetic placeholder).
+        async with session_factory() as session:
+            repo = JobRepository(session)
+            job = await repo.get_job(uuid.UUID(data["id"]))
+        assert job is not None
+        assert job.seed_username == "elonmusk"
 
     async def test_validation_max_depth(self, client: AsyncClient):
         r = await client.post(

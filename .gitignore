@@ -59,6 +59,7 @@ CLAUDE.md
 .aider.tags.cache.v*/
 *.py.md
 .agents/
+bug-screenshots/
 
 # OS / editor
 .DS_Store
@@ -67,3 +68,4 @@ Thumbs.db
 *.swo
 .idea/
 .vscode/
+bug-screenshots/
