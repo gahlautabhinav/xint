@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 import httpx
 from playwright.async_api import Page
 
+from scraper.analysis.timezone import infer_timezone
 from scraper.browser.page import human_delay, safe_goto, scroll_page, wait_for_selector
 from scraper.extractors.cross_platform import extract_all_links, extract_contacts
 from scraper.extractors.twitter import (
@@ -60,6 +61,7 @@ class ScrapeResult:
     tweets: list[TweetData] = field(default_factory=list)
     cross_platform: dict[str, str] = field(default_factory=dict)
     contacts: dict[str, list[str]] = field(default_factory=dict)  # emails, phones
+    activity: dict[str, object] | None = None  # timezone/posting-hour estimate
     following: list[str] = field(default_factory=list)
     followers: list[str] = field(default_factory=list)
     success: bool = True
@@ -163,12 +165,16 @@ async def scrape_account(
     cross_platform = extract_all_links(texts)
     contacts = extract_contacts(texts)
 
+    # Infer posting timezone from tweet timestamps (heuristic OSINT signal).
+    activity = infer_timezone([tw.timestamp for tw in tweets]).to_dict()
+
     return ScrapeResult(
         username=username,
         profile=profile,
         tweets=tweets,
         cross_platform=cross_platform,
         contacts=contacts,
+        activity=activity,
         following=following,
         followers=followers,
         success=True,

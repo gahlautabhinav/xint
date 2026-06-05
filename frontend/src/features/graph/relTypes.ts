@@ -33,6 +33,12 @@ export const REL_META: Record<RelType, RelMeta> = {
     color: "#c4b5fd",
     description: "Quote-tweeted a post.",
   },
+  RETWEETS: {
+    type: "RETWEETS",
+    label: "Reposts",
+    color: "#34d399",
+    description: "Reposted (retweeted) a post.",
+  },
   CROSS_PLATFORM_LINK: {
     type: "CROSS_PLATFORM_LINK",
     label: "Cross-platform",

@@ -43,6 +43,14 @@ class RelationshipRepository:
         if existing is not None:
             existing.evidence_count = (existing.evidence_count or 0) + 1
             existing.last_seen_at = now
+            # Merge tweet_ids from incoming metadata into existing ones (union, capped at 20).
+            new_meta: dict = kwargs.pop("metadata_", None) or {}
+            new_tids: list = new_meta.get("tweet_ids") or []
+            if new_tids or new_meta:
+                old_meta: dict = existing.metadata_ or {}
+                old_tids: list = old_meta.get("tweet_ids") or []
+                merged_tids = list(dict.fromkeys(old_tids + new_tids))[:20]
+                existing.metadata_ = {**old_meta, **new_meta, "tweet_ids": merged_tids}
             skip = {"id", "source_account_id", "target_account_id", "rel_type", "evidence_count", "last_seen_at"}
             for key, value in kwargs.items():
                 if key not in skip:

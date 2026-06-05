@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from storage.models.account import Account
+from storage.models.geocode import GeocodeCache
 from storage.models.job import (
     CrawlJob,
     JobEvent,
@@ -26,4 +27,5 @@ __all__ = [
     "QueueItemStatus",
     "RawScrapeResult",
     "ProxyRecord",
+    "GeocodeCache",
 ]

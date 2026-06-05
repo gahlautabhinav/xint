@@ -1,0 +1,321 @@
+/* =============================================================================
+   Intersection Page
+   ============================================================================= */
+
+.ix-page {
+  flex: 1 1 auto;
+  display: flex;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ── Left panel ─────────────────────────────────────────────────────────── */
+.ix-panel {
+  width: 340px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-lg);
+  padding: var(--s-xl);
+  border-right: 1px solid var(--c-hairline);
+  overflow-y: auto;
+}
+
+.ix-panel__header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-xs);
+}
+
+.ix-panel__lead {
+  margin-top: var(--s-xs);
+  line-height: 1.55;
+}
+
+/* ── Seed chips ─────────────────────────────────────────────────────────── */
+.ix-seeds {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-sm);
+}
+
+.ix-seeds__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-xs);
+}
+
+.ix-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px 3px 6px;
+  border-radius: var(--r-pill);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 12px;
+  font-family: var(--font-mono);
+  color: var(--c-body);
+}
+
+.ix-chip__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.ix-chip__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--c-mute);
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-out);
+}
+
+.ix-chip__remove:hover {
+  color: var(--c-ink);
+}
+
+/* ── Search dropdown ────────────────────────────────────────────────────── */
+.ix-search {
+  position: relative;
+}
+
+.ix-search__dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: var(--z-raised);
+  background: var(--c-canvas-card);
+  border: 1px solid var(--c-hairline);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+.ix-search__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-sm);
+  padding: 7px var(--s-md);
+  width: 100%;
+  background: transparent;
+  color: var(--c-body);
+  font-size: 13px;
+  text-align: left;
+  border: none;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+
+.ix-search__item:hover {
+  background: var(--c-fill-translucent);
+  color: var(--c-ink);
+}
+
+.ix-search__name {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 120px;
+}
+
+/* ── Sections ───────────────────────────────────────────────────────────── */
+.ix-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-sm);
+}
+
+/* ── Pairwise table ─────────────────────────────────────────────────────── */
+.ix-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.ix-table th {
+  text-align: left;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--c-mute);
+  padding: 4px 6px 6px;
+  border-bottom: 1px solid var(--c-hairline);
+}
+
+.ix-table td {
+  padding: 5px 6px;
+  color: var(--c-body);
+  border-bottom: 1px solid var(--c-hairline);
+  vertical-align: middle;
+}
+
+.ix-table tr:last-child td {
+  border-bottom: none;
+}
+
+.ix-table tr:hover td {
+  color: var(--c-ink);
+}
+
+/* ── Common nodes list ──────────────────────────────────────────────────── */
+.ix-common {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.ix-common__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-sm);
+  padding: 4px 6px;
+  border-radius: var(--r-sm);
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+
+.ix-common__row:hover {
+  background: var(--c-fill-translucent);
+}
+
+.ix-common__handle {
+  font-size: 12px;
+  color: var(--c-body);
+  text-decoration: none;
+  transition: color var(--dur-fast) var(--ease-out);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1 1 auto;
+}
+
+.ix-common__handle:hover {
+  color: var(--c-accent-breeze);
+}
+
+.ix-common__badges {
+  display: flex;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.ix-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  font-size: 9px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: #0d0f12;
+}
+
+/* ── Canvas ─────────────────────────────────────────────────────────────── */
+.ix-canvas-wrap {
+  flex: 1 1 auto;
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  background-image: radial-gradient(
+    circle at center,
+    rgba(255, 255, 255, 0.04) 1px,
+    transparent 1px
+  );
+  background-size: 28px 28px;
+}
+
+.ix-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.ix-canvas-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: var(--c-canvas);
+  z-index: var(--z-overlay);
+}
+
+.ix-canvas-overlay--idle {
+  background: transparent;
+}
+
+.ix-idle-icon {
+  color: var(--c-mute);
+  opacity: 0.2;
+}
+
+/* ── Legend ─────────────────────────────────────────────────────────────── */
+.ix-legend {
+  position: absolute;
+  top: var(--s-lg);
+  left: var(--s-lg);
+  z-index: var(--z-raised);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-sm);
+  background: color-mix(in srgb, var(--c-canvas) 80%, transparent);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--c-hairline);
+  border-radius: var(--r-pill);
+  padding: var(--s-xs) var(--s-md);
+}
+
+.ix-legend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--c-body);
+}
+
+.ix-legend__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* ── Responsive ─────────────────────────────────────────────────────────── */
+@media (max-width: 860px) {
+  .ix-page {
+    flex-direction: column;
+  }
+
+  .ix-panel {
+    width: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--c-hairline);
+    max-height: 50vh;
+  }
+
+  .ix-canvas-wrap {
+    min-height: 300px;
+  }
+}

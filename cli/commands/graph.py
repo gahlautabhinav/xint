@@ -28,6 +28,27 @@ def graph_stats(fmt: str) -> None:
     asyncio.run(_show_stats(fmt))
 
 
+@graph.command("hashtags")
+@click.option("--limit", default=25, show_default=True, type=int, help="Top-N hashtags")
+@click.option(
+    "--min-shared",
+    default=2,
+    show_default=True,
+    type=int,
+    help="Min shared hashtags to report an account pair",
+)
+@click.option(
+    "--format",
+    "fmt",
+    default="table",
+    show_default=True,
+    type=click.Choice(["table", "json"]),
+)
+def graph_hashtags(limit: int, min_shared: int, fmt: str) -> None:
+    """Rank hashtags and find accounts that share them (interest overlay)."""
+    asyncio.run(_hashtag_analysis(limit, min_shared, fmt))
+
+
 @graph.command("export")
 @click.argument("handle")
 @click.option("--platform", default="twitter", show_default=True)
@@ -65,6 +86,45 @@ async def _show_stats(fmt: str) -> None:
             account_count = await a_repo.count()
             rel_count = await r_repo.count()
         print_graph_stats(account_count, rel_count, fmt)
+    finally:
+        await engine.dispose()
+
+
+async def _hashtag_analysis(limit: int, min_shared: int, fmt: str) -> None:
+    from graph.analysis.hashtags import cooccurrence, tags_by_account, top_hashtags
+    from storage.repositories.account_repo import AccountRepository
+
+    engine, factory = await setup_db()
+    try:
+        async with factory() as session:
+            accounts = await AccountRepository(session).all()
+        tag_map = tags_by_account(accounts)
+        tops = top_hashtags(tag_map, limit=limit)
+        pairs = cooccurrence(tag_map, min_shared=min_shared)
+
+        if fmt == "json":
+            payload = {
+                "account_count": len(tag_map),
+                "top_hashtags": [{"tag": t, "count": c} for t, c in tops],
+                "pairs": [p.to_dict() for p in pairs],
+            }
+            sys.stdout.write(dump_json(payload) + "\n")
+            return
+
+        if not tag_map:
+            console.print("[yellow]No hashtags found. Scrape some accounts first.[/yellow]")
+            return
+
+        console.print(f"[bold]Top hashtags[/bold] ({len(tag_map)} accounts with tags)")
+        for tag, count in tops:
+            console.print(f"  #{tag} [dim]×{count}[/dim]")
+
+        console.print(f"\n[bold]Shared-hashtag pairs[/bold] (>= {min_shared} shared)")
+        if not pairs:
+            console.print("  [dim]none[/dim]")
+        for p in pairs:
+            shared = ", ".join(f"#{t}" for t in p.shared)
+            console.print(f"  @{p.source} ↔ @{p.target} [dim]({p.weight})[/dim] {shared}")
     finally:
         await engine.dispose()
 

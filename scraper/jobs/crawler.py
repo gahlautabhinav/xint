@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from collections import deque
+from collections import Counter, deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from urllib.parse import urlparse
@@ -316,21 +316,51 @@ class AccountCrawler:
         profile = result.profile
         now = datetime.now(timezone.utc)
 
+        self_handle = result.username.lower()
+
         # Collect edges: (handle, RelType). FOLLOWS comes from the following
-        # list; MENTIONS/REPLIES_TO from tweets. All become BFS frontier handles.
+        # list; MENTIONS/REPLIES_TO/QUOTE_TWEETS/RETWEETS from tweets. All become
+        # BFS frontier handles.
+        # edge_evidence: (handle, rel_type) -> up-to-10 tweet IDs as proof.
         mention_edges: list[tuple[str, RelType]] = []
+        edge_evidence: dict[tuple[str, RelType], list[str]] = {}
         for handle in result.following:
             mention_edges.append((handle.lower(), RelType.FOLLOWS))
         for tweet in result.tweets:
+            tid = tweet.tweet_id
             for handle in tweet.mentions:
-                mention_edges.append((handle.lower(), RelType.MENTIONS))
+                key = (handle.lower(), RelType.MENTIONS)
+                mention_edges.append(key)
+                if tid:
+                    lst = edge_evidence.setdefault(key, [])
+                    if len(lst) < 10:
+                        lst.append(tid)
             if tweet.reply_to:
-                mention_edges.append((tweet.reply_to.lower(), RelType.REPLIES_TO))
+                key = (tweet.reply_to.lower(), RelType.REPLIES_TO)
+                mention_edges.append(key)
+                if tid:
+                    lst = edge_evidence.setdefault(key, [])
+                    if len(lst) < 10:
+                        lst.append(tid)
             if tweet.quote_url:
                 # quote_url is /username/status/12345 — extract username
                 parts = tweet.quote_url.strip("/").split("/")
                 if parts and parts[0]:
-                    mention_edges.append((parts[0].lower(), RelType.QUOTE_TWEETS))
+                    key = (parts[0].lower(), RelType.QUOTE_TWEETS)
+                    mention_edges.append(key)
+                    if tid:
+                        lst = edge_evidence.setdefault(key, [])
+                        if len(lst) < 10:
+                            lst.append(tid)
+            if tweet.retweeted_from:
+                rt = tweet.retweeted_from.lower()
+                if rt != self_handle:
+                    key = (rt, RelType.RETWEETS)
+                    mention_edges.append(key)
+                    if tid:
+                        lst = edge_evidence.setdefault(key, [])
+                        if len(lst) < 10:
+                            lst.append(tid)
         # Deduplicate (handle, rel_type) pairs preserving insertion order
         seen_edges: set[tuple[str, RelType]] = set()
         deduped_edges: list[tuple[str, RelType]] = []
@@ -340,7 +370,6 @@ class AccountCrawler:
                 deduped_edges.append(pair)
 
         # Inbound followers: each follower --FOLLOWS--> this account (reversed).
-        self_handle = result.username.lower()
         follower_handles: list[str] = []
         seen_followers: set[str] = set()
         for handle in result.followers:
@@ -358,6 +387,17 @@ class AccountCrawler:
             geo_locations = list(dict.fromkeys(
                 tw.geo_location for tw in result.tweets if tw.geo_location
             ))
+
+            # Aggregate hashtags across this account's tweets → top-20 {tag, count}.
+            # Feeds the cross-account hashtag co-occurrence overlay.
+            hashtag_counts: Counter[str] = Counter()
+            for tw in result.tweets:
+                for tag in tw.hashtags:
+                    hashtag_counts[tag.lower()] += 1
+            hashtags = [
+                {"tag": tag, "count": count}
+                for tag, count in hashtag_counts.most_common(20)
+            ]
 
             account = await account_repo.upsert(
                 username=result.username,
@@ -380,12 +420,22 @@ class AccountCrawler:
                     "emails": result.contacts.get("emails", []),
                     "phones": result.contacts.get("phones", []),
                     "geo_locations": geo_locations,
+                    "hashtags": hashtags,
+                    # {} (not None) on failed scrapes — matches the empty-container
+                    # convention used for emails/phones above, so consumers can
+                    # safely do raw_data["timezone"].get(...).
+                    "timezone": result.activity or {},
                 },
             )
 
             for handle, rel_type in deduped_edges:
+                tweet_ids = edge_evidence.get((handle, rel_type), [])
+                meta = (
+                    {"tweet_ids": tweet_ids, "source_handle": self_handle}
+                    if tweet_ids else None
+                )
                 target = await account_repo.upsert(username=handle, platform="twitter")
-                await rel_repo.upsert(account.id, target.id, rel_type)
+                await rel_repo.upsert(account.id, target.id, rel_type, metadata_=meta)
                 new_handles.append(handle)
 
             for handle in follower_handles:
@@ -420,7 +470,12 @@ class AccountCrawler:
         for handle, rel_type in deduped_edges:
             dst_id = make_node_id("twitter", handle)
             await self._graph.upsert_node(dst_id, ["Account"], {})
-            await self._graph.upsert_edge(src_id, dst_id, rel_type.value, {"weight": 1.0})
+            edge_props: dict[str, object] = {"weight": 1.0}
+            tweet_ids = edge_evidence.get((handle, rel_type), [])
+            if tweet_ids:
+                edge_props["tweet_ids"] = tweet_ids
+                edge_props["source_handle"] = self_handle
+            await self._graph.upsert_edge(src_id, dst_id, rel_type.value, edge_props)
 
         for handle in follower_handles:
             f_id = make_node_id("twitter", handle)

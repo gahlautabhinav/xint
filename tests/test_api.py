@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import AsyncGenerator
 from datetime import datetime, timezone
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -429,6 +429,194 @@ class TestGetNeighbors:
         neighbor_ids = {n["node_id"] for n in r.json()["neighbors"]}
         assert dst1 in neighbor_ids
         assert dst2 in neighbor_ids
+
+
+# ---------------------------------------------------------------------------
+# GET /graph/hashtags
+# ---------------------------------------------------------------------------
+
+
+async def _seed_tagged(session_factory, username: str, tags: dict[str, int]) -> None:
+    async with session_factory() as session:
+        await AccountRepository(session).upsert(
+            username=username,
+            platform="twitter",
+            raw_data={"hashtags": [{"tag": t, "count": c} for t, c in tags.items()]},
+        )
+        await session.commit()
+
+
+class TestHashtagAnalysis:
+    async def test_empty(self, client: AsyncClient):
+        r = await client.get("/graph/hashtags")
+        assert r.status_code == 200
+        data = r.json()
+        assert data["account_count"] == 0
+        assert data["top_hashtags"] == []
+        assert data["pairs"] == []
+
+    async def test_ranking_and_pairs(self, client: AsyncClient, session_factory):
+        await _seed_tagged(session_factory, "alice", {"btc": 5, "eth": 1})
+        await _seed_tagged(session_factory, "bob", {"btc": 2, "doge": 4})
+
+        r = await client.get("/graph/hashtags?min_shared=1")
+        assert r.status_code == 200
+        data = r.json()
+        assert data["account_count"] == 2
+        top = {h["tag"]: h["count"] for h in data["top_hashtags"]}
+        assert top["btc"] == 7
+        assert len(data["pairs"]) == 1
+        pair = data["pairs"][0]
+        assert {pair["source"], pair["target"]} == {"alice", "bob"}
+        assert pair["shared"] == ["btc"]
+
+    async def test_min_shared_filters(self, client: AsyncClient, session_factory):
+        await _seed_tagged(session_factory, "alice", {"btc": 1, "eth": 1})
+        await _seed_tagged(session_factory, "bob", {"btc": 1})
+
+        r = await client.get("/graph/hashtags?min_shared=2")
+        assert r.status_code == 200
+        assert r.json()["pairs"] == []
+
+
+# ---------------------------------------------------------------------------
+# GET /geo/locations
+# ---------------------------------------------------------------------------
+
+
+async def _seed_located(
+    session_factory,
+    username: str,
+    *,
+    location: str | None = None,
+    geo_locations: list[str] | None = None,
+    utc_offset: int | None = None,
+) -> None:
+    raw: dict = {}
+    if geo_locations is not None:
+        raw["geo_locations"] = geo_locations
+    if utc_offset is not None:
+        raw["timezone"] = {"utc_offset": utc_offset}
+    async with session_factory() as session:
+        await AccountRepository(session).upsert(
+            username=username,
+            platform="twitter",
+            location=location,
+            raw_data=raw or None,
+        )
+        await session.commit()
+
+
+def _fake_geocode(result):
+    """Return an AsyncMock standing in for nominatim_geocode."""
+    from scraper.analysis.geo import GeoResult  # noqa: F401
+
+    async def _call(query, client=None):
+        return result(query) if callable(result) else result
+
+    return AsyncMock(side_effect=_call)
+
+
+class TestGeoLocations:
+    async def test_empty(self, client: AsyncClient):
+        r = await client.get("/geo/locations")
+        assert r.status_code == 200
+        data = r.json()
+        assert data["points"] == []
+        assert data["timezone_only"] == []
+        assert data["pending"] == 0
+        assert data["total_accounts"] == 0
+
+    async def test_geocodes_and_caches(self, client: AsyncClient, session_factory):
+        from scraper.analysis.geo import GeoResult
+
+        await _seed_located(session_factory, "alice", location="London")
+        mock = _fake_geocode(GeoResult(lat=51.5, lon=-0.12, display_name="London, UK", importance=0.8))
+
+        with (
+            patch("api.routers.geo.nominatim_geocode", mock),
+            patch("api.routers.geo.asyncio.sleep", new=AsyncMock()),
+        ):
+            r1 = await client.get("/geo/locations")
+            assert r1.status_code == 200
+            d1 = r1.json()
+            assert len(d1["points"]) == 1
+            p = d1["points"][0]
+            assert p["username"] == "alice"
+            assert p["lat"] == 51.5
+            assert p["source"] == "profile"
+            assert p["confidence"] == "high"
+            assert d1["pending"] == 0
+            assert d1["located"] == 1
+            assert mock.call_count == 1
+
+            # Second call hits the persistent cache — no new Nominatim request.
+            r2 = await client.get("/geo/locations")
+            assert len(r2.json()["points"]) == 1
+            assert mock.call_count == 1
+
+    async def test_tweet_geo_outranks_profile(self, client: AsyncClient, session_factory):
+        from scraper.analysis.geo import GeoResult
+
+        await _seed_located(
+            session_factory, "bob", location="London", geo_locations=["Tokyo"]
+        )
+        mock = _fake_geocode(
+            lambda q: GeoResult(lat=35.6, lon=139.7, display_name=q, importance=0.7)
+        )
+        with (
+            patch("api.routers.geo.nominatim_geocode", mock),
+            patch("api.routers.geo.asyncio.sleep", new=AsyncMock()),
+        ):
+            r = await client.get("/geo/locations")
+        points = r.json()["points"]
+        assert len(points) == 1
+        assert points[0]["source"] == "tweet_geo"
+        assert points[0]["confidence"] == "high"
+
+    async def test_negative_cache_no_point(self, client: AsyncClient, session_factory):
+        await _seed_located(session_factory, "carol", location="Atlantis")
+        mock = _fake_geocode(None)  # Nominatim finds nothing
+        with (
+            patch("api.routers.geo.nominatim_geocode", mock),
+            patch("api.routers.geo.asyncio.sleep", new=AsyncMock()),
+        ):
+            r1 = await client.get("/geo/locations")
+            assert r1.json()["points"] == []
+            assert mock.call_count == 1
+            # Negative cached — not re-queried.
+            await client.get("/geo/locations")
+            assert mock.call_count == 1
+
+    async def test_timezone_only(self, client: AsyncClient, session_factory):
+        await _seed_located(session_factory, "dave", utc_offset=-5)
+        r = await client.get("/geo/locations")
+        data = r.json()
+        assert data["points"] == []
+        assert len(data["timezone_only"]) == 1
+        tz = data["timezone_only"][0]
+        assert tz["username"] == "dave"
+        assert tz["timezone_utc_offset"] == -5
+        assert tz["approx_longitude"] == -75.0
+
+    async def test_max_new_budget_leaves_pending(self, client: AsyncClient, session_factory):
+        from scraper.analysis.geo import GeoResult
+
+        await _seed_located(session_factory, "a", location="London")
+        await _seed_located(session_factory, "b", location="Paris")
+        await _seed_located(session_factory, "c", location="Tokyo")
+        mock = _fake_geocode(
+            lambda q: GeoResult(lat=1.0, lon=2.0, display_name=q, importance=0.5)
+        )
+        with (
+            patch("api.routers.geo.nominatim_geocode", mock),
+            patch("api.routers.geo.asyncio.sleep", new=AsyncMock()),
+        ):
+            r = await client.get("/geo/locations?max_new=1")
+        data = r.json()
+        assert len(data["points"]) == 1
+        assert data["pending"] == 2
+        assert mock.call_count == 1
 
 
 # ---------------------------------------------------------------------------

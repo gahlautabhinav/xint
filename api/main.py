@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from api.routers import accounts, graph, jobs
+from api.routers import accounts, geo, graph, jobs
 from config.settings import get_settings
 from graph.backends.base import AbstractGraphBackend
 from graph.backends.neo4j_backend import Neo4jBackend
@@ -58,7 +58,12 @@ async def _rebuild_graph(session_factory: async_sessionmaker[AsyncSession], back
         if src_acc and dst_acc:
             src_id = make_node_id(src_acc.platform, src_acc.username)
             dst_id = make_node_id(dst_acc.platform, dst_acc.username)
-            await backend.upsert_edge(src_id, dst_id, rel.rel_type.value, {"weight": 1.0})
+            edge_props: dict[str, Any] = {"weight": 1.0}
+            if rel.metadata_:
+                for key in ("tweet_ids", "source_handle", "platform"):
+                    if key in rel.metadata_:
+                        edge_props[key] = rel.metadata_[key]
+            await backend.upsert_edge(src_id, dst_id, rel.rel_type.value, edge_props)
 
     logger.info("Graph rebuilt from DB: %d nodes, %d edges", len(all_accounts), len(all_rels))
 
@@ -117,6 +122,7 @@ def create_app() -> FastAPI:
     app.include_router(jobs.router)
     app.include_router(accounts.router)
     app.include_router(graph.router)
+    app.include_router(geo.router)
 
     @app.get("/health", tags=["meta"])
     async def health() -> dict[str, str]:

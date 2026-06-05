@@ -13,6 +13,9 @@ logger = logging.getLogger(__name__)
 _HASHTAG_RE = re.compile(r"#(\w+)")
 _MENTION_RE = re.compile(r"@(\w{1,50})")
 _COUNT_HEAD_RE = re.compile(r"^([\d,.]+[KMBkmb]?)")
+# Legacy manual retweet form: "RT @handle: original text". Native reposts are
+# detected from the DOM socialContext instead (see _TWEETS_JS).
+_RT_RE = re.compile(r"^RT @([A-Za-z0-9_]{1,15})\b")
 
 
 def _parse_count(text: str | None) -> int | None:
@@ -60,6 +63,7 @@ class TweetData:
     hashtags: list[str] = field(default_factory=list)
     reply_to: str | None = None
     quote_url: str | None = None
+    retweeted_from: str | None = None  # original author when this is a repost/RT
     geo_location: str | None = None    # visible location chip when user tagged location
 
 
@@ -67,7 +71,7 @@ class TweetData:
 # JS snippets — evaluated in the page context
 # ---------------------------------------------------------------------------
 
-_PROFILE_JS = """
+_PROFILE_JS = r"""
 () => {
     const tid = id => document.querySelector('[data-testid="' + id + '"]');
     const text = id => { const el = tid(id); return el ? el.innerText.trim() : null; };
@@ -177,6 +181,21 @@ _TWEETS_JS = r"""
             }
         }
 
+        // Native repost: a socialContext header reads "<Name> reposted". The tweet
+        // card body then belongs to the ORIGINAL author, whose handle sits in the
+        // tweet's User-Name link. That handle is who this account retweeted.
+        let retweeted_from = null;
+        const social = tw.querySelector('[data-testid="socialContext"]');
+        if (social && /repost|retweet/i.test(social.innerText || '')) {
+            const nameEl = tw.querySelector('[data-testid="User-Name"]');
+            if (nameEl) {
+                for (const a of nameEl.querySelectorAll('a[href^="/"]')) {
+                    const m = (a.getAttribute('href') || '').match(/^\/([A-Za-z0-9_]{1,15})$/);
+                    if (m) { retweeted_from = m[1]; break; }
+                }
+            }
+        }
+
         // Geo chip — Twitter deprecated public tagging 2019 but some tweets still show it
         const geoEl = tw.querySelector('[data-testid="tweetGeoTag"]') ||
                       tw.querySelector('a[href*="maps.google"], a[href*="place"]');
@@ -188,6 +207,7 @@ _TWEETS_JS = r"""
             timestamp: timeEl ? timeEl.getAttribute('datetime') : null,
             quote_url: quoteLink ? quoteLink.getAttribute('href') : null,
             reply_to,
+            retweeted_from,
             geo_location,
         };
     });
@@ -297,6 +317,12 @@ async def extract_tweets(page: Page) -> list[TweetData]:
     tweets: list[TweetData] = []
     for raw in raw_list:
         text = raw.get("text", "")
+        # Native repost handle from the DOM, else legacy "RT @handle:" in text.
+        retweeted_from = raw.get("retweeted_from")
+        if not retweeted_from:
+            rt = _RT_RE.match(text)
+            if rt:
+                retweeted_from = rt.group(1)
         tweets.append(
             TweetData(
                 tweet_id=raw.get("tweet_id"),
@@ -306,6 +332,7 @@ async def extract_tweets(page: Page) -> list[TweetData]:
                 hashtags=_HASHTAG_RE.findall(text),
                 reply_to=raw.get("reply_to"),
                 quote_url=raw.get("quote_url"),
+                retweeted_from=retweeted_from,
                 geo_location=raw.get("geo_location") or None,
             )
         )

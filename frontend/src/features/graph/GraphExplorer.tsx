@@ -18,15 +18,14 @@ import { Pill } from "@/components/Pill";
 import { ErrorState, LoadingState } from "@/components/states";
 import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";
 
-import { GraphCanvas } from "./GraphCanvas";
+import { GraphCanvas, type EdgeSelection } from "./GraphCanvas";
+import { EdgeInspector } from "./EdgeInspector";
 import { NodeInspector } from "./NodeInspector";
 import { RelTypeFilter } from "./RelTypeFilter";
 import { Legend } from "./Legend";
 import { mergeElements, subgraphToElements, type NodeDatum } from "./transform";
 import "./graph.css";
 
-const DEPTHS = [1, 2, 3, 4];
-const LIMITS = [50, 100, 200, 500, 1000];
 const SUGGESTIONS = ["elonmusk", "sama", "naval", "balajis"];
 
 export function GraphExplorer() {
@@ -49,6 +48,7 @@ export function GraphExplorer() {
   const [hiddenRel, setHiddenRel] = useState<Set<string>>(new Set());
   const [focusMode, setFocusMode] = useState(false);
   const [focusHops, setFocusHops] = useState(1);
+  const [selectedEdge, setSelectedEdge] = useState<EdgeSelection | null>(null);
   const [expandingId, setExpandingId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [fitSignal, setFitSignal] = useState(0);
@@ -95,6 +95,7 @@ export function GraphExplorer() {
       setRoot({ platform: "twitter", handle });
       setElementsMap(new Map());
       setSelectedId(null);
+      setSelectedEdge(null);
       setHiddenRel(new Set());
       setFocusMode(false);
       const next = new URLSearchParams(params);
@@ -293,32 +294,32 @@ export function GraphExplorer() {
 
         <label className="explorer__control">
           <span className="eyebrow eyebrow--sm">Depth</span>
-          <select
-            className="input input--mini"
+          <input
+            className="input input--mini input--num"
+            type="number"
+            min={1}
+            max={20}
             value={depth}
-            onChange={(e) => setDepth(Number(e.target.value))}
-          >
-            {DEPTHS.map((d) => (
-              <option key={d} value={d}>
-                {d}
-              </option>
-            ))}
-          </select>
+            onChange={(e) => {
+              const v = parseInt(e.target.value, 10);
+              if (!isNaN(v) && v >= 1) setDepth(v);
+            }}
+          />
         </label>
 
         <label className="explorer__control">
           <span className="eyebrow eyebrow--sm">Limit</span>
-          <select
-            className="input input--mini"
+          <input
+            className="input input--mini input--num"
+            type="number"
+            min={1}
+            max={10000}
             value={limit}
-            onChange={(e) => setLimit(Number(e.target.value))}
-          >
-            {LIMITS.map((l) => (
-              <option key={l} value={l}>
-                {l}
-              </option>
-            ))}
-          </select>
+            onChange={(e) => {
+              const v = parseInt(e.target.value, 10);
+              if (!isNaN(v) && v >= 1) setLimit(v);
+            }}
+          />
         </label>
 
         <Pill size="sm" onClick={() => runSearch(input)}>
@@ -432,7 +433,8 @@ export function GraphExplorer() {
               rootId={rootId}
               hiddenRelTypes={hiddenRel}
               selectedId={selectedId}
-              onSelectNode={setSelectedId}
+              onSelectNode={(id) => { setSelectedEdge(null); setSelectedId(id); }}
+              onSelectEdge={(edge) => { setSelectedId(null); setSelectedEdge(edge); }}
               onExpandNode={expandNode}
               fitSignal={fitSignal}
               relayoutSignal={relayoutSignal}
@@ -459,8 +461,8 @@ export function GraphExplorer() {
               <Legend />
             </div>
 
-            {/* Right: inspector */}
-            {selectedNode && (
+            {/* Right: node inspector */}
+            {selectedNode && !selectedEdge && (
               <NodeInspector
                 key={selectedNode.id}
                 node={selectedNode}
@@ -468,6 +470,15 @@ export function GraphExplorer() {
                 onExpand={expandNode}
                 onFocus={focusNode}
                 expanding={expandingId === selectedNode.id}
+              />
+            )}
+
+            {/* Right: edge inspector */}
+            {selectedEdge && !selectedNode && (
+              <EdgeInspector
+                key={selectedEdge.id}
+                edge={selectedEdge}
+                onClose={() => setSelectedEdge(null)}
               />
             )}
 

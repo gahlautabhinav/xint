@@ -8,6 +8,9 @@
 import type {
   Account,
   AccountListResponse,
+  GeoLocationsResponse,
+  HashtagAnalysisResponse,
+  IntersectionResponse,
   Job,
   JobCreate,
   JobEventsResponse,
@@ -163,6 +166,36 @@ export const api = {
     return request<Account>(
       `/accounts/${encodeURIComponent(platform)}/${encodeURIComponent(handle)}`,
     );
+  },
+
+  getHashtagAnalysis(
+    opts: { limit?: number; min_shared?: number } = {},
+  ): Promise<HashtagAnalysisResponse> {
+    return request<HashtagAnalysisResponse>(`/graph/hashtags`, {
+      params: { limit: opts.limit ?? 25, min_shared: opts.min_shared ?? 1 },
+    });
+  },
+
+  getIntersection(
+    seeds: string[],
+    opts: { depth?: number; limit?: number; platform?: string } = {},
+  ): Promise<IntersectionResponse> {
+    return request<IntersectionResponse>(`/graph/intersection`, {
+      params: {
+        seeds,
+        depth: opts.depth ?? 2,
+        limit: opts.limit ?? 200,
+        platform: opts.platform ?? "twitter",
+      },
+    });
+  },
+
+  getGeoLocations(
+    opts: { maxNew?: number; limit?: number } = {},
+  ): Promise<GeoLocationsResponse> {
+    return request<GeoLocationsResponse>(`/geo/locations`, {
+      params: { max_new: opts.maxNew ?? 8, limit: opts.limit ?? 5000 },
+    });
   },
 
   health(): Promise<{ status: string }> {

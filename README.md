@@ -8,8 +8,11 @@
 
 ## Features
 
-- **Network crawl** — follows, followers, mentions, replies, quote tweets up to configurable depth
-- **Cross-platform detection** — detects Instagram, GitHub, LinkedIn, TikTok, YouTube, Telegram handles from bios and pinned tweets
+- **Network crawl** — follows, followers, mentions, replies, quote tweets, **reposts (retweets)** up to configurable depth
+- **Cross-platform detection** — detects Instagram, GitHub, LinkedIn, TikTok, YouTube, Telegram, Discord handles from bios and pinned tweets
+- **Contact + enrichment** — publicly-posted emails/phones, location, join date, profile image, tweet geo-tags (t.co links expanded first)
+- **Posting-timezone inference** — buckets tweet timestamps to estimate an account's likely UTC offset (heuristic OSINT signal)
+- **Hashtag co-occurrence** — ranks hashtags and surfaces account pairs sharing them (`xint graph hashtags`, `GET /graph/hashtags`)
 - **Live progress** — real-time terminal-style activity log while crawling, per-account events streamed to the UI
 - **Interactive graph UI** — React + Cytoscape.js visualization, drag-reactive physics, click-to-expand nodes, local focus mode, zoom-aware labels
 - **REST API + CLI** — FastAPI backend, Click CLI (`xint`)
@@ -109,6 +112,9 @@ xint accounts search alice
 # Export graph
 xint graph export elonmusk -o graph.json
 xint graph export elonmusk -o graph.csv --format csv
+
+# Hashtag ranking + accounts sharing hashtags
+xint graph hashtags --min-shared 2
 
 # Auth management
 xint auth status

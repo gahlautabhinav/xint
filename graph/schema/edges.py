@@ -16,6 +16,9 @@ REPLIES_TO: str = "REPLIES_TO"
 QUOTE_TWEETS: str = "QUOTE_TWEETS"
 """Account A quote-tweets a tweet authored by account B."""
 
+RETWEETS: str = "RETWEETS"
+"""Account A reposts (retweets) a tweet authored by account B."""
+
 CROSS_PLATFORM_LINK: str = "CROSS_PLATFORM_LINK"
 """Account A's profile (bio / pinned tweet / website field) contains a
 discoverable link to account B on a *different* platform."""
@@ -29,5 +32,6 @@ ALL_REL_TYPES: list[str] = [
     MENTIONS,
     REPLIES_TO,
     QUOTE_TWEETS,
+    RETWEETS,
     CROSS_PLATFORM_LINK,
 ]

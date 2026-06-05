@@ -58,6 +58,8 @@ export function subgraphToElements(
       target: e.dst,
       rel: e.rel_type,
       weight: typeof e.props?.weight === "number" ? e.props.weight : 1,
+      tweet_ids: Array.isArray(e.props?.tweet_ids) ? e.props.tweet_ids : [],
+      source_handle: (e.props?.source_handle as string) ?? null,
     },
   }));
 

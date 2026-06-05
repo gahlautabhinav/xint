@@ -497,6 +497,78 @@ class TestAccountCrawler:
         edge_calls = [c.args for c in mock_graph.upsert_edge.call_args_list]
         assert any(args[2] == "FOLLOWS" for args in edge_calls)
 
+    async def test_run_records_retweet_edge(self):
+        """A repost tweet → RETWEETS edge stored and original author enqueued."""
+        mock_factory, mock_job, mock_job_repo, mock_ar, mock_rr = _make_mock_session_factory()
+        pool_cm, mock_pool, mock_page = _make_mock_pool()
+        mock_graph = AsyncMock()
+        config = CrawlerConfig(seed_username="alice", max_depth=1, max_accounts=10)
+
+        scraped: list[str] = []
+
+        async def mock_scrape(page, username, *, bucket, rate_profile, **kwargs):
+            scraped.append(username)
+            if username == "alice":
+                result = _success_result("alice")
+                result.tweets = [
+                    TweetData(
+                        tweet_id="1",
+                        text="great thread",
+                        timestamp=None,
+                        retweeted_from="origauthor",
+                    )
+                ]
+                return result
+            return _success_result(username)
+
+        with (
+            patch("scraper.jobs.crawler.BrowserPool", return_value=pool_cm),
+            patch("scraper.jobs.crawler.JobRepository", return_value=mock_job_repo),
+            patch("scraper.jobs.crawler.AccountRepository", return_value=mock_ar),
+            patch("scraper.jobs.crawler.RelationshipRepository", return_value=mock_rr),
+            patch("scraper.jobs.crawler.scrape_account", new=mock_scrape),
+        ):
+            crawler = AccountCrawler(config, mock_factory, mock_graph)
+            await crawler.run()
+
+        from storage.models.relationship import RelType
+
+        rel_types = [c.args[2] for c in mock_rr.upsert.call_args_list]
+        assert RelType.RETWEETS in rel_types
+        assert "origauthor" in scraped  # original author became a BFS frontier handle
+
+    async def test_run_stores_hashtags_and_timezone(self):
+        """raw_data persisted for the seed includes aggregated hashtags + timezone."""
+        mock_factory, mock_job, mock_job_repo, mock_ar, mock_rr = _make_mock_session_factory()
+        pool_cm, mock_pool, mock_page = _make_mock_pool()
+        mock_graph = AsyncMock()
+        config = CrawlerConfig(seed_username="alice", max_depth=0, max_accounts=1)
+
+        async def mock_scrape(page, username, *, bucket, rate_profile, **kwargs):
+            result = _success_result("alice")
+            result.tweets = [
+                TweetData(tweet_id="1", text="#btc #web3", timestamp=None, hashtags=["btc", "web3"]),
+                TweetData(tweet_id="2", text="#btc again", timestamp=None, hashtags=["btc"]),
+            ]
+            result.activity = {"sample_size": 2, "utc_offset": None}
+            return result
+
+        with (
+            patch("scraper.jobs.crawler.BrowserPool", return_value=pool_cm),
+            patch("scraper.jobs.crawler.JobRepository", return_value=mock_job_repo),
+            patch("scraper.jobs.crawler.AccountRepository", return_value=mock_ar),
+            patch("scraper.jobs.crawler.RelationshipRepository", return_value=mock_rr),
+            patch("scraper.jobs.crawler.scrape_account", new=mock_scrape),
+        ):
+            crawler = AccountCrawler(config, mock_factory, mock_graph)
+            await crawler.run()
+
+        raw_calls = [c.kwargs for c in mock_ar.upsert.call_args_list if "raw_data" in c.kwargs]
+        assert raw_calls
+        rd = raw_calls[0]["raw_data"]
+        assert {"tag": "btc", "count": 2} in rd["hashtags"]
+        assert rd["timezone"] == {"sample_size": 2, "utc_offset": None}
+
     async def test_run_respects_max_depth(self):
         """max_depth=0 → only seed scraped; mentions not enqueued."""
         mock_factory, mock_job, mock_job_repo, mock_ar, mock_rr = _make_mock_session_factory()

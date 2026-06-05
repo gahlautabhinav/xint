@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { BadgeCheck, ExternalLink, Network, Search, X } from "lucide-react";
+import { AtSign, BadgeCheck, ExternalLink, MapPin, Network, Phone, Search, X } from "lucide-react";
 import { api } from "@/lib/api";
 import type { Account } from "@/lib/types";
 import { formatFull, formatDate } from "@/lib/format";
@@ -41,11 +41,37 @@ function AccountDetail({ account, onClose }: { account: Account; onClose: () => 
           <dt className="eyebrow eyebrow--sm">Following</dt>
           <dd className="tabular">{formatFull(account.following_count)}</dd>
         </div>
+        {account.tweet_count > 0 && (
+          <div>
+            <dt className="eyebrow eyebrow--sm">Tweets</dt>
+            <dd className="tabular">{formatFull(account.tweet_count)}</dd>
+          </div>
+        )}
         <div>
           <dt className="eyebrow eyebrow--sm">Depth</dt>
           <dd className="tabular">{account.scrape_depth}</dd>
         </div>
+        {account.join_date && (
+          <div>
+            <dt className="eyebrow eyebrow--sm">Joined</dt>
+            <dd className="mono">{account.join_date}</dd>
+          </div>
+        )}
+        {account.timezone_utc_offset != null && (
+          <div>
+            <dt className="eyebrow eyebrow--sm">Est. timezone</dt>
+            <dd className="mono">
+              UTC{account.timezone_utc_offset >= 0 ? "+" : ""}{account.timezone_utc_offset}
+            </dd>
+          </div>
+        )}
       </dl>
+
+      {account.location && (
+        <span className="inspector__meta">
+          <MapPin size={12} aria-hidden /> {account.location}
+        </span>
+      )}
 
       {account.website && (
         <a
@@ -57,6 +83,26 @@ function AccountDetail({ account, onClose }: { account: Account; onClose: () => 
           <ExternalLink size={14} />
           <span className="grow">{account.website}</span>
         </a>
+      )}
+
+      {account.emails.length > 0 && (
+        <div className="inspector__contacts">
+          {account.emails.map((e) => (
+            <span key={e} className="inspector__contact mono">
+              <AtSign size={12} aria-hidden /> {e}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {account.phones.length > 0 && (
+        <div className="inspector__contacts">
+          {account.phones.map((p) => (
+            <span key={p} className="inspector__contact mono">
+              <Phone size={12} aria-hidden /> {p}
+            </span>
+          ))}
+        </div>
       )}
 
       <span className="inspector__meta mono">scraped {formatDate(account.scraped_at)}</span>

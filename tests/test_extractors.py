@@ -208,6 +208,40 @@ class TestExtractTweets:
         tweets = await extract_tweets(page)
         assert tweets[0].reply_to == "alice"
 
+    async def test_retweet_from_dom(self):
+        page = AsyncMock()
+        page.evaluate = AsyncMock(
+            return_value=[
+                {
+                    "tweet_id": "888",
+                    "text": "original content",
+                    "timestamp": None,
+                    "retweeted_from": "origauthor",
+                }
+            ]
+        )
+        tweets = await extract_tweets(page)
+        assert tweets[0].retweeted_from == "origauthor"
+
+    async def test_retweet_rt_regex_fallback(self):
+        # No DOM signal, but legacy "RT @handle:" text → retweeted_from inferred.
+        page = AsyncMock()
+        page.evaluate = AsyncMock(
+            return_value=[
+                {"tweet_id": "999", "text": "RT @newsorg: breaking story", "timestamp": None}
+            ]
+        )
+        tweets = await extract_tweets(page)
+        assert tweets[0].retweeted_from == "newsorg"
+
+    async def test_no_retweet_defaults_none(self):
+        page = AsyncMock()
+        page.evaluate = AsyncMock(
+            return_value=[{"tweet_id": "1", "text": "just a normal tweet", "timestamp": None}]
+        )
+        tweets = await extract_tweets(page)
+        assert tweets[0].retweeted_from is None
+
 
 # ---------------------------------------------------------------------------
 # extract_mentions_from_text / extract_hashtags_from_text

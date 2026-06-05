@@ -1,10 +1,13 @@
 import { NavLink } from "react-router-dom";
-import { Activity, Network, Users } from "lucide-react";
+import { Activity, GitMerge, Hash, MapPin, Network, Users } from "lucide-react";
 
 const LINKS = [
   { to: "/", label: "Explorer", icon: Network, end: true },
   { to: "/jobs", label: "Jobs", icon: Activity, end: false },
   { to: "/accounts", label: "Accounts", icon: Users, end: false },
+  { to: "/hashtags", label: "Hashtags", icon: Hash, end: false },
+  { to: "/intersection", label: "Intersection", icon: GitMerge, end: false },
+  { to: "/geo", label: "Geo Map", icon: MapPin, end: false },
 ];
 
 export function NavBar() {

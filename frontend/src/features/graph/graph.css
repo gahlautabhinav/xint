@@ -40,6 +40,18 @@
   background-color: transparent;
   border-color: var(--c-border-translucent);
 }
+.input--num {
+  width: 88px;
+  padding-left: var(--s-md);
+  padding-right: var(--s-sm);
+  font-family: var(--font-mono);
+  text-align: left;
+}
+.input--num::-webkit-inner-spin-button,
+.input--num::-webkit-outer-spin-button {
+  opacity: 0.5;
+  margin-left: 2px;
+}
 .explorer__toolbar-spacer {
   flex: 1 1 auto;
 }
@@ -316,6 +328,94 @@
   padding: var(--s-md);
   border: 1px dashed var(--c-hairline);
   border-radius: var(--r-sm);
+}
+/* ── Edge inspector ─────────────────────────────────────────────────────── */
+.edge-inspector__rel {
+  display: flex;
+  align-items: center;
+  gap: var(--s-sm);
+}
+.edge-inspector__swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.edge-inspector__label {
+  font-size: 22px;
+}
+.edge-inspector__accounts {
+  display: flex;
+  align-items: center;
+  gap: var(--s-sm);
+  flex-wrap: wrap;
+}
+.edge-inspector__handle {
+  color: var(--c-ink);
+  text-decoration: none;
+  font-size: var(--t-body-sm);
+  transition: color 0.12s;
+}
+.edge-inspector__handle:hover {
+  color: var(--c-accent-breeze);
+}
+.edge-inspector__arrow {
+  color: var(--c-mute);
+  font-size: 13px;
+}
+.edge-inspector__evidence {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-sm);
+}
+.edge-inspector__tweets {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.edge-inspector__tweet {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  background: var(--c-fill-translucent);
+  border: 1px solid var(--c-hairline);
+  border-radius: var(--r-sm);
+  text-decoration: none;
+  color: var(--c-body);
+  font-size: 12px;
+  transition: border-color 0.12s, color 0.12s;
+}
+.edge-inspector__tweet:hover {
+  border-color: var(--c-accent-breeze);
+  color: var(--c-ink);
+}
+.edge-inspector__tid {
+  color: var(--c-mute);
+  font-size: 10px;
+  margin-left: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 120px;
+}
+
+.inspector__contacts {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.inspector__contact {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--c-body);
+  background: var(--c-fill-translucent);
+  border: 1px solid var(--c-hairline);
+  border-radius: var(--r-sm);
+  padding: 2px 7px;
+  word-break: break-all;
 }
 .inspector__actions {
   display: flex;

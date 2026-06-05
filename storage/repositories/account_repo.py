@@ -80,6 +80,12 @@ class AccountRepository:
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
 
+    async def all(self, limit: int = 5000) -> list[Account]:
+        """Return all accounts (up to *limit*). Used by cross-account analyses."""
+        stmt = select(Account).limit(limit)
+        result = await self._session.execute(stmt)
+        return list(result.scalars().all())
+
     async def get_by_depth(self, max_depth: int) -> list[Account]:
         """Return all accounts whose ``scrape_depth`` is <= *max_depth*."""
         stmt = (

@@ -14,12 +14,22 @@ if (!registered) {
   registered = true;
 }
 
+export interface EdgeSelection {
+  id: string;
+  source: string;
+  target: string;
+  rel: string;
+  tweet_ids: string[];
+  source_handle: string | null;
+}
+
 interface GraphCanvasProps {
   elements: ElementDefinition[];
   rootId: string | null;
   hiddenRelTypes: Set<string>;
   selectedId: string | null;
   onSelectNode: (id: string | null) => void;
+  onSelectEdge: (edge: EdgeSelection | null) => void;
   onExpandNode: (id: string) => void;
   fitSignal: number;
   relayoutSignal: number;
@@ -83,6 +93,7 @@ export function GraphCanvas({
   hiddenRelTypes,
   selectedId,
   onSelectNode,
+  onSelectEdge,
   onExpandNode,
   fitSignal,
   relayoutSignal,
@@ -97,8 +108,8 @@ export function GraphCanvas({
   const labelRaf = useRef(0);
   const firstLayoutDone = useRef(false);
   // Keep latest callbacks in refs so the cy event handlers (bound once) stay current.
-  const handlers = useRef({ onSelectNode, onExpandNode });
-  handlers.current = { onSelectNode, onExpandNode };
+  const handlers = useRef({ onSelectNode, onSelectEdge, onExpandNode });
+  handlers.current = { onSelectNode, onSelectEdge, onExpandNode };
   // Mirror reducedMotion into a ref so the once-bound drag handlers read it live.
   const rmRef = useRef(reducedMotion);
   rmRef.current = reducedMotion;
@@ -147,9 +158,27 @@ export function GraphCanvas({
     });
     cyRef.current = cy;
 
-    cy.on("tap", "node", (evt) => handlers.current.onSelectNode(evt.target.id()));
+    cy.on("tap", "node", (evt) => {
+      handlers.current.onSelectEdge(null);
+      handlers.current.onSelectNode(evt.target.id());
+    });
+    cy.on("tap", "edge", (evt) => {
+      handlers.current.onSelectNode(null);
+      const e = evt.target;
+      handlers.current.onSelectEdge({
+        id: e.id(),
+        source: e.data("source") as string,
+        target: e.data("target") as string,
+        rel: e.data("rel") as string,
+        tweet_ids: (e.data("tweet_ids") as string[]) || [],
+        source_handle: (e.data("source_handle") as string) || null,
+      });
+    });
     cy.on("tap", (evt) => {
-      if (evt.target === cy) handlers.current.onSelectNode(null);
+      if (evt.target === cy) {
+        handlers.current.onSelectNode(null);
+        handlers.current.onSelectEdge(null);
+      }
     });
     cy.on("dbltap", "node", (evt) => handlers.current.onExpandNode(evt.target.id()));
 

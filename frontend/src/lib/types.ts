@@ -45,6 +45,7 @@ export const REL_TYPES = [
   "MENTIONS",
   "REPLIES_TO",
   "QUOTE_TWEETS",
+  "RETWEETS",
   "CROSS_PLATFORM_LINK",
 ] as const;
 
@@ -109,14 +110,95 @@ export interface Account {
   display_name: string | null;
   bio: string | null;
   website: string | null;
+  location: string | null;
+  profile_image_url: string | null;
   followers_count: number;
   following_count: number;
+  tweet_count: number;
   is_verified: boolean;
   scraped_at: string | null;
   scrape_depth: number;
+  join_date: string | null;
+  emails: string[];
+  phones: string[];
+  timezone_utc_offset: number | null;
 }
 
 export interface AccountListResponse {
   items: Account[];
   total: number;
+}
+
+// ── Intersection ──────────────────────────────────────────────────────
+export interface CommonNodeResult {
+  node_id: string;
+  handle: string;
+  in_seeds: string[];
+  props: Record<string, unknown>;
+}
+
+export interface PairwiseSimilarity {
+  seed_a: string;
+  seed_b: string;
+  jaccard: number;
+  common_count: number;
+  union_count: number;
+  common_followings: number;
+}
+
+export interface IntersectionResponse {
+  seeds: string[];
+  common_nodes: CommonNodeResult[];
+  pairwise: PairwiseSimilarity[];
+  combined_nodes: GraphNode[];
+  combined_edges: GraphEdge[];
+}
+
+// ── Geo ────────────────────────────────────────────────────────────────
+export interface GeoPoint {
+  username: string;
+  display_name: string | null;
+  location_text: string;
+  geocoded_name: string | null;
+  lat: number;
+  lon: number;
+  source: "profile" | "tweet_geo" | string;
+  confidence: "high" | "medium" | "low" | string;
+  followers_count: number;
+  scrape_depth: number;
+  timezone_utc_offset: number | null;
+}
+
+export interface TimezoneOnly {
+  username: string;
+  display_name: string | null;
+  timezone_utc_offset: number;
+  approx_longitude: number;
+}
+
+export interface GeoLocationsResponse {
+  points: GeoPoint[];
+  timezone_only: TimezoneOnly[];
+  pending: number;
+  total_accounts: number;
+  located: number;
+}
+
+// ── Hashtags ───────────────────────────────────────────────────────────
+export interface HashtagCount {
+  tag: string;
+  count: number;
+}
+
+export interface HashtagPair {
+  source: string;
+  target: string;
+  shared: string[];
+  weight: number;
+}
+
+export interface HashtagAnalysisResponse {
+  account_count: number;
+  top_hashtags: HashtagCount[];
+  pairs: HashtagPair[];
 }

@@ -1,10 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import {
+  AtSign,
   BadgeCheck,
   ExternalLink,
+  MapPin,
   Maximize2,
   Network,
   Crosshair,
+  Phone,
   X,
 } from "lucide-react";
 import { api } from "@/lib/api";
@@ -44,6 +47,12 @@ export function NodeInspector({
   const bio = account?.bio;
   const website = account?.website;
   const verified = account?.is_verified ?? node.verified;
+  const location = account?.location;
+  const joinDate = account?.join_date;
+  const tzOffset = account?.timezone_utc_offset;
+  const emails = account?.emails ?? [];
+  const phones = account?.phones ?? [];
+  const tweetCount = account?.tweet_count;
 
   return (
     <aside className="inspector reveal" aria-label={`Details for ${handle}`}>
@@ -83,11 +92,57 @@ export function NodeInspector({
             <dd className="tabular">{formatFull(following)}</dd>
           </div>
         )}
+        {tweetCount != null && tweetCount > 0 && (
+          <div>
+            <dt className="eyebrow eyebrow--sm">Tweets</dt>
+            <dd className="tabular">{formatFull(tweetCount)}</dd>
+          </div>
+        )}
         <div>
           <dt className="eyebrow eyebrow--sm">Depth</dt>
           <dd className="tabular">{node.depth >= 99 ? "—" : node.depth}</dd>
         </div>
+        {joinDate && (
+          <div>
+            <dt className="eyebrow eyebrow--sm">Joined</dt>
+            <dd className="mono">{joinDate}</dd>
+          </div>
+        )}
+        {tzOffset != null && (
+          <div>
+            <dt className="eyebrow eyebrow--sm">Est. timezone</dt>
+            <dd className="mono">
+              UTC{tzOffset >= 0 ? "+" : ""}{tzOffset}
+            </dd>
+          </div>
+        )}
       </dl>
+
+      {location && (
+        <span className="inspector__meta">
+          <MapPin size={12} aria-hidden /> {location}
+        </span>
+      )}
+
+      {emails.length > 0 && (
+        <div className="inspector__contacts">
+          {emails.map((e) => (
+            <span key={e} className="inspector__contact mono">
+              <AtSign size={12} aria-hidden /> {e}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {phones.length > 0 && (
+        <div className="inspector__contacts">
+          {phones.map((p) => (
+            <span key={p} className="inspector__contact mono">
+              <Phone size={12} aria-hidden /> {p}
+            </span>
+          ))}
+        </div>
+      )}
 
       {website && (
         <a

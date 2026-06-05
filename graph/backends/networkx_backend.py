@@ -123,6 +123,12 @@ class NetworkxBackend(AbstractGraphBackend):
         existing_key = self._find_edge_key(src, dst, rel_type)
         if existing_key is not None:
             existing_props: dict[str, Any] = self._g[src][dst][existing_key]["props"]  # type: ignore[index]
+            # Merge tweet_ids (union, capped at 20) before applying other props.
+            incoming_tids: list = props.get("tweet_ids") or []
+            if incoming_tids:
+                old_tids: list = existing_props.get("tweet_ids") or []
+                props = dict(props)
+                props["tweet_ids"] = list(dict.fromkeys(old_tids + incoming_tids))[:20]
             # Accumulate weight if both sides carry it
             if "weight" in existing_props and "weight" in props:
                 merged = dict(existing_props)
