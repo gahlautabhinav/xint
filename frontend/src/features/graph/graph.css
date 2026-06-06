@@ -417,6 +417,69 @@
   padding: 2px 7px;
   word-break: break-all;
 }
+/* ── Username enumeration ───────────────────────────────────────────────── */
+.inspector__enum {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-xs);
+  padding-top: var(--s-sm);
+  border-top: 1px solid var(--c-hairline);
+}
+.inspector__enum-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.inspector__enum-stat {
+  font-size: 11px;
+  color: var(--c-accent-breeze, #00c2ff);
+}
+.inspector__enum-loading,
+.inspector__enum-empty {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--c-mute);
+}
+.inspector__enum-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.inspector__enum-hit {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--c-body);
+  text-decoration: none;
+  background: var(--c-fill-translucent);
+  border: 1px solid var(--c-hairline);
+  border-radius: var(--r-pill);
+  padding: 3px 9px;
+  transition:
+    color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+.inspector__enum-hit:hover {
+  color: var(--c-accent-breeze, #00c2ff);
+  border-color: var(--c-accent-breeze, #00c2ff);
+}
+.inspector__enum-note {
+  font-size: 10px;
+  color: var(--c-mute);
+  line-height: 1.45;
+}
+.spin {
+  animation: spin 0.9s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .inspector__actions {
   display: flex;
   flex-wrap: wrap;

@@ -160,6 +160,21 @@ export interface IntersectionResponse {
   combined_edges: GraphEdge[];
 }
 
+// ── Enrich: username enumeration ───────────────────────────────────────
+export interface SiteResult {
+  name: string;
+  category: string;
+  url: string;
+  status: "found" | "not_found" | "unknown" | string;
+}
+
+export interface UsernameEnumResponse {
+  username: string;
+  checked: number;
+  found: number;
+  results: SiteResult[];
+}
+
 // ── Geo ────────────────────────────────────────────────────────────────
 export interface GeoPoint {
   username: string;

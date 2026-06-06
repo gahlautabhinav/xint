@@ -738,6 +738,51 @@ class TestGeoSeedScope:
 
 
 # ---------------------------------------------------------------------------
+# GET /enrich/username
+# ---------------------------------------------------------------------------
+
+
+class TestUsernameEnum:
+    async def test_returns_results(self, client: AsyncClient):
+        from scraper.enrich.username_enum import SiteResult
+
+        fake = AsyncMock(
+            return_value=[
+                SiteResult("GitHub", "code", "https://github.com/alice", "found"),
+                SiteResult("GitLab", "code", "https://gitlab.com/alice", "not_found"),
+                SiteResult("Reddit", "social", "https://reddit.com/user/alice", "unknown"),
+            ]
+        )
+        with patch("api.routers.enrich.enumerate_username", fake):
+            r = await client.get("/enrich/username?username=alice")
+        assert r.status_code == 200
+        data = r.json()
+        assert data["username"] == "alice"
+        assert data["checked"] == 3
+        assert data["found"] == 1
+        assert {x["name"] for x in data["results"]} == {"GitHub", "GitLab", "Reddit"}
+
+    async def test_strips_at_prefix(self, client: AsyncClient):
+        from scraper.enrich.username_enum import SiteResult
+
+        fake = AsyncMock(return_value=[SiteResult("GitHub", "code", "x", "found")])
+        with patch("api.routers.enrich.enumerate_username", fake) as mock:
+            r = await client.get("/enrich/username?username=@alice")
+        assert r.status_code == 200
+        assert r.json()["username"] == "alice"
+        mock.assert_awaited_once_with("alice")
+
+    async def test_rejects_invalid_username(self, client: AsyncClient):
+        # Slash would let the handle inject a path into outbound URLs.
+        r = await client.get("/enrich/username?username=foo%2Fbar")
+        assert r.status_code == 400
+
+    async def test_rejects_empty(self, client: AsyncClient):
+        r = await client.get("/enrich/username?username=")
+        assert r.status_code == 422  # fails Query min_length
+
+
+# ---------------------------------------------------------------------------
 # API key enforcement
 # ---------------------------------------------------------------------------
 

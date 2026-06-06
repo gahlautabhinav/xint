@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from api.routers import accounts, geo, graph, jobs
+from api.routers import accounts, enrich, geo, graph, jobs
 from config.settings import get_settings
 from graph.backends.base import AbstractGraphBackend
 from graph.backends.neo4j_backend import Neo4jBackend
@@ -123,6 +123,7 @@ def create_app() -> FastAPI:
     app.include_router(accounts.router)
     app.include_router(graph.router)
     app.include_router(geo.router)
+    app.include_router(enrich.router)
 
     @app.get("/health", tags=["meta"])
     async def health() -> dict[str, str]:

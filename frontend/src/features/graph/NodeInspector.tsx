@@ -1,8 +1,11 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   AtSign,
   BadgeCheck,
   ExternalLink,
+  Globe,
+  Loader2,
   MapPin,
   Maximize2,
   Network,
@@ -32,6 +35,7 @@ export function NodeInspector({
   expanding,
 }: NodeInspectorProps) {
   const { platform, bareHandle, handle } = parseNodeId(node.id);
+  const [enumStarted, setEnumStarted] = useState(false);
 
   // Pull the full account record from the relational store (richer than graph props).
   const { data: account } = useQuery({
@@ -40,6 +44,19 @@ export function NodeInspector({
     enabled: node.hasProfile,
     retry: false,
   });
+
+  // Cross-platform username enumeration (Sherlock-style) — lazy, on click.
+  const enumQuery = useQuery({
+    queryKey: ["enum-username", bareHandle],
+    queryFn: () => api.enumUsername(bareHandle),
+    enabled: enumStarted,
+    retry: false,
+    staleTime: 5 * 60_000,
+  });
+  const foundSites = (enumQuery.data?.results ?? []).filter((r) => r.status === "found");
+  const unknownCount = (enumQuery.data?.results ?? []).filter(
+    (r) => r.status === "unknown",
+  ).length;
 
   const displayName = account?.display_name || node.displayName || handle;
   const followers = account?.followers_count ?? node.followers;
@@ -168,6 +185,71 @@ export function NodeInspector({
           this handle to fetch its profile.
         </p>
       )}
+
+      {/* Cross-platform username enumeration */}
+      <div className="inspector__enum">
+        <div className="inspector__enum-head">
+          <span className="eyebrow eyebrow--sm">Same handle elsewhere</span>
+          {enumQuery.data && (
+            <span className="inspector__enum-stat mono">
+              {enumQuery.data.found}/{enumQuery.data.checked}
+            </span>
+          )}
+        </div>
+
+        {!enumStarted ? (
+          <Pill
+            size="sm"
+            icon={<Globe size={14} />}
+            onClick={() => setEnumStarted(true)}
+            title="Check ~30 sites for this username (public profile URLs)"
+          >
+            Find accounts
+          </Pill>
+        ) : enumQuery.isLoading ? (
+          <span className="inspector__enum-loading mono">
+            <Loader2 size={13} className="spin" /> checking ~30 sites…
+          </span>
+        ) : enumQuery.isError ? (
+          <span className="inspector__enum-empty mono">
+            Lookup failed.{" "}
+            <button
+              type="button"
+              className="ulink"
+              onClick={() => enumQuery.refetch()}
+            >
+              Retry
+            </button>
+          </span>
+        ) : foundSites.length > 0 ? (
+          <>
+            <div className="inspector__enum-grid">
+              {foundSites.map((s) => (
+                <a
+                  key={s.name}
+                  className="inspector__enum-hit mono"
+                  href={s.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  title={`${s.name} · ${s.category}`}
+                >
+                  <span className="inspector__enum-name">{s.name}</span>
+                  <ExternalLink size={11} />
+                </a>
+              ))}
+            </div>
+            <p className="inspector__enum-note mono">
+              same username — may be different people.
+              {unknownCount > 0 && ` ${unknownCount} site${unknownCount > 1 ? "s" : ""} inconclusive.`}
+            </p>
+          </>
+        ) : (
+          <span className="inspector__enum-empty mono">
+            No matches on the checked sites.
+            {unknownCount > 0 && ` (${unknownCount} inconclusive.)`}
+          </span>
+        )}
+      </div>
 
       <div className="inspector__actions">
         <Pill

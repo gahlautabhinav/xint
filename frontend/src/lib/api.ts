@@ -19,6 +19,7 @@ import type {
   NeighborsResponse,
   RelType,
   SubgraphResponse,
+  UsernameEnumResponse,
 } from "./types";
 
 const BASE_URL: string = import.meta.env.VITE_API_BASE_URL || "/api";
@@ -218,6 +219,12 @@ export const api = {
         seed: opts.seed || undefined,
         depth: opts.depth ?? 2,
       },
+    });
+  },
+
+  enumUsername(username: string): Promise<UsernameEnumResponse> {
+    return request<UsernameEnumResponse>(`/enrich/username`, {
+      params: { username },
     });
   },
 
