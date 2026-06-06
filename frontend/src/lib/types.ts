@@ -175,6 +175,19 @@ export interface UsernameEnumResponse {
   results: SiteResult[];
 }
 
+export interface PivotLink {
+  label: string;
+  url: string;
+  group: "reverse_image" | "identity" | "dork" | "breach" | string;
+}
+
+export interface PivotsResponse {
+  handle: string;
+  display_name: string | null;
+  profile_image_url: string | null;
+  links: PivotLink[];
+}
+
 // ── Geo ────────────────────────────────────────────────────────────────
 export interface GeoPoint {
   username: string;

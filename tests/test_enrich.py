@@ -1,7 +1,14 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from scraper.enrich.pivots import (
+    PivotLink,
+    build_pivots,
+    gravatar_url,
+    upscale_avatar,
+)
 from scraper.enrich.sites import SITES, Site
 from scraper.enrich.username_enum import (
     SiteResult,
@@ -151,3 +158,77 @@ class TestEnumerateUsername:
             results = await enumerate_username("alice", sites=sites)
 
         assert results[0].status == "unknown"
+
+
+# ---------------------------------------------------------------------------
+# pivots
+# ---------------------------------------------------------------------------
+
+
+class TestUpscaleAvatar:
+    def test_swaps_normal_for_large(self):
+        assert (
+            upscale_avatar("https://pbs.twimg.com/profile_images/1/abc_normal.jpg")
+            == "https://pbs.twimg.com/profile_images/1/abc_400x400.jpg"
+        )
+
+    def test_none_passthrough(self):
+        assert upscale_avatar(None) is None
+
+    def test_non_twitter_unchanged(self):
+        assert upscale_avatar("https://x.test/pic.png") == "https://x.test/pic.png"
+
+
+class TestGravatar:
+    def test_known_hash(self):
+        # The canonical Gravatar example hash for test@example.com.
+        assert gravatar_url("test@example.com") == (
+            "https://www.gravatar.com/55502f40dc8b7c769880b10874abc9d0"
+        )
+
+    def test_normalises_case_and_whitespace(self):
+        assert gravatar_url("  Test@Example.com ") == gravatar_url("test@example.com")
+
+
+def _acct(**kw):
+    base = dict(
+        username="alice",
+        display_name="Alice A",
+        website="alice.dev",
+        profile_image_url="https://pbs.twimg.com/profile_images/1/a_normal.jpg",
+        raw_data={"emails": ["alice@example.com"]},
+    )
+    base.update(kw)
+    return SimpleNamespace(**base)
+
+
+class TestBuildPivots:
+    def test_groups_present(self):
+        links = build_pivots(_acct())
+        groups = {pl.group for pl in links}
+        assert {"reverse_image", "identity", "dork", "breach"} <= groups
+        assert all(isinstance(pl, PivotLink) for pl in links)
+
+    def test_reverse_image_uses_upscaled_url(self):
+        links = build_pivots(_acct())
+        ri = [pl for pl in links if pl.group == "reverse_image"]
+        assert len(ri) == 4
+        assert all("_400x400" in pl.url for pl in ri)
+
+    def test_no_image_means_no_reverse_links(self):
+        links = build_pivots(_acct(profile_image_url=None))
+        assert not any(pl.group == "reverse_image" for pl in links)
+
+    def test_breach_and_gravatar_per_email(self):
+        links = build_pivots(_acct(raw_data={"emails": ["a@x.com", "b@y.com"]}))
+        breach = [pl for pl in links if pl.group == "breach"]
+        # 2 per email (Dehashed, IntelX) + 1 HIBP page
+        assert len(breach) == 5
+        gravatars = [pl for pl in links if pl.label.startswith("Gravatar")]
+        assert len(gravatars) == 2
+
+    def test_no_emails_no_breach(self):
+        links = build_pivots(_acct(raw_data={}))
+        assert not any(pl.group == "breach" for pl in links)
+        # still has wayback + handle dork
+        assert any("web.archive.org" in pl.url for pl in links)

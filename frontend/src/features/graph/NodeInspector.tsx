@@ -1,9 +1,11 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
   AtSign,
   BadgeCheck,
   ExternalLink,
+  Fingerprint,
   Globe,
   Loader2,
   MapPin,
@@ -18,6 +20,13 @@ import { parseNodeId } from "@/lib/nodeId";
 import { formatFull, formatDate } from "@/lib/format";
 import { Pill } from "@/components/Pill";
 import type { NodeDatum } from "./transform";
+
+const PIVOT_GROUPS: { key: string; label: string }[] = [
+  { key: "reverse_image", label: "Reverse image" },
+  { key: "identity", label: "Identity" },
+  { key: "dork", label: "Web search" },
+  { key: "breach", label: "Breach / exposure" },
+];
 
 interface NodeInspectorProps {
   node: NodeDatum;
@@ -36,6 +45,7 @@ export function NodeInspector({
 }: NodeInspectorProps) {
   const { platform, bareHandle, handle } = parseNodeId(node.id);
   const [enumStarted, setEnumStarted] = useState(false);
+  const [pivotsStarted, setPivotsStarted] = useState(false);
 
   // Pull the full account record from the relational store (richer than graph props).
   const { data: account } = useQuery({
@@ -57,6 +67,15 @@ export function NodeInspector({
   const unknownCount = (enumQuery.data?.results ?? []).filter(
     (r) => r.status === "unknown",
   ).length;
+
+  // OSINT pivot links (reverse-image / identity / breach / dork) — lazy.
+  const pivotsQuery = useQuery({
+    queryKey: ["pivots", platform, bareHandle],
+    queryFn: () => api.getPivots(platform, bareHandle),
+    enabled: pivotsStarted,
+    retry: false,
+    staleTime: 5 * 60_000,
+  });
 
   const displayName = account?.display_name || node.displayName || handle;
   const followers = account?.followers_count ?? node.followers;
@@ -251,6 +270,66 @@ export function NodeInspector({
         )}
       </div>
 
+      {/* OSINT pivot links */}
+      <div className="inspector__enum">
+        <div className="inspector__enum-head">
+          <span className="eyebrow eyebrow--sm">OSINT pivots</span>
+        </div>
+
+        {!pivotsStarted ? (
+          <Pill
+            size="sm"
+            icon={<Fingerprint size={14} />}
+            onClick={() => setPivotsStarted(true)}
+            title="Reverse-image, identity, breach and web-search links for this account"
+          >
+            Build pivots
+          </Pill>
+        ) : pivotsQuery.isLoading ? (
+          <span className="inspector__enum-loading mono">
+            <Loader2 size={13} className="spin" /> building…
+          </span>
+        ) : pivotsQuery.isError ? (
+          <span className="inspector__enum-empty mono">
+            {(pivotsQuery.error as Error)?.message ?? "Failed."}{" "}
+            <button type="button" className="ulink" onClick={() => pivotsQuery.refetch()}>
+              Retry
+            </button>
+          </span>
+        ) : (
+          PIVOT_GROUPS.map(({ key, label }) => {
+            const links = (pivotsQuery.data?.links ?? []).filter((l) => l.group === key);
+            if (links.length === 0) return null;
+            return (
+              <div key={key} className="inspector__pivot-group">
+                <span className="inspector__pivot-label">{label}</span>
+                <div className="inspector__enum-grid">
+                  {links.map((l) => (
+                    <a
+                      key={l.label}
+                      className="inspector__enum-hit mono"
+                      href={l.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      title={l.url}
+                    >
+                      <span className="inspector__enum-name">{l.label}</span>
+                      <ExternalLink size={11} />
+                    </a>
+                  ))}
+                </div>
+              </div>
+            );
+          })
+        )}
+        {pivotsQuery.data && (
+          <p className="inspector__enum-note mono">
+            Opens third-party search tools. Same handle/photo ≠ same person —
+            verify before concluding.
+          </p>
+        )}
+      </div>
+
       <div className="inspector__actions">
         <Pill
           variant="primary"
@@ -264,6 +343,13 @@ export function NodeInspector({
         <Pill size="sm" icon={<Crosshair size={14} />} onClick={() => onFocus(node.id)}>
           Focus
         </Pill>
+        <Link
+          to={`/dossier/${platform}/${bareHandle}`}
+          className="pill pill--sm pill__icon"
+          aria-label="Open full dossier"
+        >
+          <Fingerprint size={14} /> Dossier
+        </Link>
         <a
           className="pill pill--sm pill__icon"
           href={`https://x.com/${bareHandle}`}

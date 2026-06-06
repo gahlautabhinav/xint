@@ -783,6 +783,47 @@ class TestUsernameEnum:
 
 
 # ---------------------------------------------------------------------------
+# GET /enrich/pivots/{platform}/{handle}
+# ---------------------------------------------------------------------------
+
+
+class TestPivots:
+    async def test_returns_grouped_links(self, client: AsyncClient, session_factory):
+        async with session_factory() as session:
+            await AccountRepository(session).upsert(
+                username="alice",
+                platform="twitter",
+                display_name="Alice",
+                website="alice.dev",
+                profile_image_url="https://pbs.twimg.com/profile_images/1/a_normal.jpg",
+                raw_data={"emails": ["alice@example.com"]},
+            )
+            await session.commit()
+
+        r = await client.get("/enrich/pivots/twitter/alice")
+        assert r.status_code == 200
+        data = r.json()
+        assert data["handle"] == "alice"
+        groups = {link["group"] for link in data["links"]}
+        assert {"reverse_image", "identity", "dork", "breach"} <= groups
+        assert any("_400x400" in link["url"] for link in data["links"])
+
+    async def test_strips_at(self, client: AsyncClient, seed_account: Account):
+        r = await client.get("/enrich/pivots/twitter/@alice")
+        assert r.status_code == 200
+        assert r.json()["handle"] == "alice"
+
+    async def test_not_found(self, client: AsyncClient):
+        r = await client.get("/enrich/pivots/twitter/nobody")
+        assert r.status_code == 404
+
+    async def test_invalid_handle(self, client: AsyncClient):
+        # '!' stays in one path segment but fails the strict handle charset.
+        r = await client.get("/enrich/pivots/twitter/foo!bar")
+        assert r.status_code == 400
+
+
+# ---------------------------------------------------------------------------
 # API key enforcement
 # ---------------------------------------------------------------------------
 

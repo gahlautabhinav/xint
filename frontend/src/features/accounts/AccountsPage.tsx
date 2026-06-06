@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { AtSign, BadgeCheck, ExternalLink, MapPin, Network, Phone, Search, X } from "lucide-react";
+import { AtSign, BadgeCheck, ExternalLink, Fingerprint, MapPin, Network, Phone, Search, X } from "lucide-react";
 import { api } from "@/lib/api";
 import type { Account } from "@/lib/types";
 import { formatFull, formatDate } from "@/lib/format";
@@ -108,8 +108,13 @@ function AccountDetail({ account, onClose }: { account: Account; onClose: () => 
       <span className="inspector__meta mono">scraped {formatDate(account.scraped_at)}</span>
 
       <div className="acct-detail__actions">
+        <Link to={`/dossier/${account.platform}/${account.username}`}>
+          <Pill variant="primary" size="sm" icon={<Fingerprint size={14} />}>
+            Full dossier
+          </Pill>
+        </Link>
         <Link to={`/?q=${account.username}`}>
-          <Pill variant="primary" size="sm" icon={<Network size={14} />}>
+          <Pill size="sm" icon={<Network size={14} />}>
             View in graph
           </Pill>
         </Link>

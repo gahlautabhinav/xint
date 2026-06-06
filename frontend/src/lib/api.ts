@@ -17,6 +17,7 @@ import type {
   JobEventsResponse,
   JobListResponse,
   NeighborsResponse,
+  PivotsResponse,
   RelType,
   SubgraphResponse,
   UsernameEnumResponse,
@@ -226,6 +227,12 @@ export const api = {
     return request<UsernameEnumResponse>(`/enrich/username`, {
       params: { username },
     });
+  },
+
+  getPivots(platform: string, handle: string): Promise<PivotsResponse> {
+    return request<PivotsResponse>(
+      `/enrich/pivots/${encodeURIComponent(platform)}/${encodeURIComponent(handle)}`,
+    );
   },
 
   health(): Promise<{ status: string }> {

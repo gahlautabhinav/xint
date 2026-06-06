@@ -471,6 +471,17 @@
   color: var(--c-mute);
   line-height: 1.45;
 }
+.inspector__pivot-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.inspector__pivot-label {
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--c-mute);
+}
 .spin {
   animation: spin 0.9s linear infinite;
 }
