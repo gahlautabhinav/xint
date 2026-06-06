@@ -430,6 +430,72 @@ class TestAccountCrawler:
         assert "alice" in scraped_usernames
         assert "bob" in scraped_usernames
 
+    async def test_target_usernames_crawls_explicit_set(self):
+        """Enrichment mode seeds the queue from target_usernames, not the seed."""
+        mock_factory, mock_job, mock_job_repo, mock_ar, mock_rr = _make_mock_session_factory()
+        pool_cm, mock_pool, mock_page = _make_mock_pool()
+        mock_graph = AsyncMock()
+        config = CrawlerConfig(
+            seed_username="alice",
+            max_depth=2,
+            max_accounts=10,
+            target_usernames=["carol", "dave"],
+            expand=False,
+        )
+
+        scraped: list[str] = []
+
+        async def mock_scrape(page, username, *, bucket, rate_profile, **kwargs):
+            scraped.append(username)
+            return _success_result(username)
+
+        with (
+            patch("scraper.jobs.crawler.BrowserPool", return_value=pool_cm),
+            patch("scraper.jobs.crawler.JobRepository", return_value=mock_job_repo),
+            patch("scraper.jobs.crawler.AccountRepository", return_value=mock_ar),
+            patch("scraper.jobs.crawler.RelationshipRepository", return_value=mock_rr),
+            patch("scraper.jobs.crawler.scrape_account", new=mock_scrape),
+        ):
+            crawler = AccountCrawler(config, mock_factory, mock_graph)
+            await crawler.run()
+
+        assert set(scraped) == {"carol", "dave"}
+        assert "alice" not in scraped  # the seed itself is not crawled
+
+    async def test_expand_false_does_not_enqueue_mentions(self):
+        """With expand=False, mentioned handles are NOT followed."""
+        mock_factory, mock_job, mock_job_repo, mock_ar, mock_rr = _make_mock_session_factory()
+        pool_cm, mock_pool, mock_page = _make_mock_pool()
+        mock_graph = AsyncMock()
+        config = CrawlerConfig(
+            seed_username="alice",
+            max_depth=3,
+            max_accounts=10,
+            target_usernames=["alice"],
+            expand=False,
+        )
+
+        scraped: list[str] = []
+
+        async def mock_scrape(page, username, *, bucket, rate_profile, **kwargs):
+            scraped.append(username)
+            if username == "alice":
+                return _success_result("alice", mentions=["bob"])
+            return _success_result(username)
+
+        with (
+            patch("scraper.jobs.crawler.BrowserPool", return_value=pool_cm),
+            patch("scraper.jobs.crawler.JobRepository", return_value=mock_job_repo),
+            patch("scraper.jobs.crawler.AccountRepository", return_value=mock_ar),
+            patch("scraper.jobs.crawler.RelationshipRepository", return_value=mock_rr),
+            patch("scraper.jobs.crawler.scrape_account", new=mock_scrape),
+        ):
+            crawler = AccountCrawler(config, mock_factory, mock_graph)
+            await crawler.run()
+
+        assert scraped == ["alice"]
+        assert "bob" not in scraped  # no frontier growth
+
     async def test_run_expands_via_following(self):
         """Seed follows 'bob' → bob enqueued/scraped and a FOLLOWS edge stored."""
         mock_factory, mock_job, mock_job_repo, mock_ar, mock_rr = _make_mock_session_factory()

@@ -620,6 +620,124 @@ class TestGeoLocations:
 
 
 # ---------------------------------------------------------------------------
+# POST /jobs/discover
+# ---------------------------------------------------------------------------
+
+
+async def _seed_stub(session_factory, username: str) -> None:
+    """An edge-only stub: account row with no raw_data (never scraped)."""
+    async with session_factory() as session:
+        await AccountRepository(session).upsert(username=username, platform="twitter")
+        await session.commit()
+
+
+class TestDiscoverAll:
+    async def test_queues_uncrawled_stubs(
+        self, client: AsyncClient, graph_backend: NetworkxBackend, session_factory
+    ):
+        from graph.schema.nodes import make_node_id
+
+        seed = make_node_id("twitter", "alice")
+        await graph_backend.upsert_node(seed, ["Account"], {})
+        for h in ("bob", "carol"):
+            nid = make_node_id("twitter", h)
+            await graph_backend.upsert_node(nid, ["Account"], {})
+            await graph_backend.upsert_edge(seed, nid, "MENTIONS", {})
+        # alice is crawled; bob/carol are stubs
+        await _seed_located(session_factory, "alice", location="NYC")
+        await _seed_stub(session_factory, "bob")
+        await _seed_stub(session_factory, "carol")
+
+        with patch("api.routers.jobs.threading.Thread") as MockThread:
+            r = await client.post("/jobs/discover", json={"seed": "alice", "depth": 2})
+        assert r.status_code == 202
+        data = r.json()
+        assert data["queued"] == 2  # bob + carol
+        assert data["remaining"] == 0
+        assert data["job_id"] is not None
+        MockThread.assert_called_once()
+        MockThread.return_value.start.assert_called_once()
+
+    async def test_batch_cap_leaves_remaining(
+        self, client: AsyncClient, graph_backend: NetworkxBackend, session_factory
+    ):
+        from graph.schema.nodes import make_node_id
+
+        seed = make_node_id("twitter", "hub")
+        await graph_backend.upsert_node(seed, ["Account"], {})
+        for h in ("s1", "s2", "s3"):
+            nid = make_node_id("twitter", h)
+            await graph_backend.upsert_node(nid, ["Account"], {})
+            await graph_backend.upsert_edge(seed, nid, "MENTIONS", {})
+            await _seed_stub(session_factory, h)
+        await _seed_located(session_factory, "hub", location="NYC")
+
+        with patch("api.routers.jobs.threading.Thread"):
+            r = await client.post(
+                "/jobs/discover", json={"seed": "hub", "depth": 2, "max_accounts": 2}
+            )
+        data = r.json()
+        assert data["queued"] == 2
+        assert data["remaining"] == 1
+
+    async def test_nothing_to_discover(
+        self, client: AsyncClient, graph_backend: NetworkxBackend, session_factory
+    ):
+        from graph.schema.nodes import make_node_id
+
+        seed = make_node_id("twitter", "solo")
+        await graph_backend.upsert_node(seed, ["Account"], {})
+        await _seed_located(session_factory, "solo", location="NYC")
+
+        with patch("api.routers.jobs.threading.Thread") as MockThread:
+            r = await client.post("/jobs/discover", json={"seed": "solo", "depth": 2})
+        assert r.status_code == 202
+        data = r.json()
+        assert data["queued"] == 0
+        assert data["job_id"] is None
+        MockThread.assert_not_called()
+
+    async def test_seed_not_in_graph_404(self, client: AsyncClient):
+        r = await client.post("/jobs/discover", json={"seed": "ghost", "depth": 2})
+        assert r.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# GET /geo/locations?seed=  (seed-scoped map)
+# ---------------------------------------------------------------------------
+
+
+class TestGeoSeedScope:
+    async def test_seed_scopes_to_subgraph(
+        self, client: AsyncClient, graph_backend: NetworkxBackend, session_factory
+    ):
+        from graph.schema.nodes import make_node_id
+        from scraper.analysis.geo import GeoResult
+
+        # graph: alice -> bob ; eve is unrelated
+        a = make_node_id("twitter", "alice")
+        b = make_node_id("twitter", "bob")
+        await graph_backend.upsert_node(a, ["Account"], {})
+        await graph_backend.upsert_node(b, ["Account"], {})
+        await graph_backend.upsert_edge(a, b, "MENTIONS", {})
+        await _seed_located(session_factory, "alice", location="London")
+        await _seed_located(session_factory, "bob", location="Paris")
+        await _seed_located(session_factory, "eve", location="Tokyo")  # not in alice's graph
+
+        mock = _fake_geocode(
+            lambda q: GeoResult(lat=1.0, lon=2.0, display_name=q, importance=0.6)
+        )
+        with (
+            patch("api.routers.geo.nominatim_geocode", mock),
+            patch("api.routers.geo.asyncio.sleep", new=AsyncMock()),
+        ):
+            r = await client.get("/geo/locations?seed=alice&depth=2")
+        usernames = {p["username"] for p in r.json()["points"]}
+        assert usernames == {"alice", "bob"}
+        assert "eve" not in usernames
+
+
+# ---------------------------------------------------------------------------
 # API key enforcement
 # ---------------------------------------------------------------------------
 

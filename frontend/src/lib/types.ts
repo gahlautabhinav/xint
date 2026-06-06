@@ -102,6 +102,12 @@ export interface JobCreate {
   proxy_urls: string[];
 }
 
+export interface DiscoverResponse {
+  job_id: string | null;
+  queued: number;
+  remaining: number;
+}
+
 // ── Accounts ──────────────────────────────────────────────────────────
 export interface Account {
   id: string;
@@ -181,6 +187,7 @@ export interface GeoLocationsResponse {
   timezone_only: TimezoneOnly[];
   pending: number;
   total_accounts: number;
+  scraped_accounts: number;
   located: number;
 }
 

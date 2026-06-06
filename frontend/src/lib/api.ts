@@ -8,6 +8,7 @@
 import type {
   Account,
   AccountListResponse,
+  DiscoverResponse,
   GeoLocationsResponse,
   HashtagAnalysisResponse,
   IntersectionResponse,
@@ -145,6 +146,23 @@ export const api = {
     return request<Job>(`/jobs`, { method: "POST", body });
   },
 
+  discoverAll(body: {
+    seed: string;
+    depth?: number;
+    max_accounts?: number;
+    platform?: string;
+  }): Promise<DiscoverResponse> {
+    return request<DiscoverResponse>(`/jobs/discover`, {
+      method: "POST",
+      body: {
+        seed: body.seed,
+        depth: body.depth ?? 2,
+        max_accounts: body.max_accounts ?? 200,
+        platform: body.platform ?? "twitter",
+      },
+    });
+  },
+
   cancelJob(jobId: string): Promise<Job> {
     return request<Job>(`/jobs/${jobId}/cancel`, { method: "POST" });
   },
@@ -191,10 +209,15 @@ export const api = {
   },
 
   getGeoLocations(
-    opts: { maxNew?: number; limit?: number } = {},
+    opts: { maxNew?: number; limit?: number; seed?: string; depth?: number } = {},
   ): Promise<GeoLocationsResponse> {
     return request<GeoLocationsResponse>(`/geo/locations`, {
-      params: { max_new: opts.maxNew ?? 8, limit: opts.limit ?? 5000 },
+      params: {
+        max_new: opts.maxNew ?? 8,
+        limit: opts.limit ?? 5000,
+        seed: opts.seed || undefined,
+        depth: opts.depth ?? 2,
+      },
     });
   },
 

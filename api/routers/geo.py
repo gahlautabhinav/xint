@@ -5,12 +5,13 @@ import asyncio
 import httpx
 from fastapi import APIRouter, Query, Request
 
-from api.dependencies import ApiKeyCheck, DbSession
+from api.dependencies import ApiKeyCheck, DbSession, GraphBackend
 from api.schemas.geo import (
     GeoLocationsResponse,
     GeoPointResponse,
     TimezoneOnlyResponse,
 )
+from graph.schema.nodes import make_node_id, parse_node_id
 from scraper.analysis.geo import (
     GeoResult,
     nominatim_geocode,
@@ -77,16 +78,34 @@ async def get_locations(
     request: Request,
     _key: ApiKeyCheck,
     session: DbSession,
+    graph: GraphBackend,
     max_new: int = Query(default=8, ge=0, le=50, description="Max fresh Nominatim lookups this call"),
     limit: int = Query(default=5000, ge=1, le=10000),
+    seed: str | None = Query(default=None, description="Scope to this seed's network only"),
+    depth: int = Query(default=2, ge=1, le=5),
+    platform: str = Query(default="twitter"),
 ) -> GeoLocationsResponse:
     """Map pins for scraped accounts, geocoded via Nominatim (cached, throttled).
 
     Resolves cached locations instantly and geocodes up to ``max_new`` fresh
     strings per call (1 req/sec). Poll while ``pending > 0`` — the map fills in
-    progressively as the cache warms.
+    progressively as the cache warms. When ``seed`` is given, only accounts in
+    that seed's subgraph are mapped.
     """
     accounts = await AccountRepository(session).all(limit=limit)
+
+    if seed:
+        # Restrict to the handles present in the seed's subgraph.
+        data = await graph.get_subgraph(make_node_id(platform, seed), depth=depth, limit=10000)
+        scope: set[str] = set()
+        for n in data["nodes"]:
+            try:
+                pf, handle = parse_node_id(n["node_id"])
+            except ValueError:
+                continue
+            if pf == platform:
+                scope.add(handle.lstrip("@").lower())
+        accounts = [a for a in accounts if a.username.lower() in scope]
 
     # Build per-account candidates and the global set of unique queries.
     per_account: list[tuple[Account, list[tuple[str, str, str]]]] = []
@@ -166,10 +185,16 @@ async def get_locations(
             )
         )
 
+    # "Scraped" = profile actually fetched (raw_data present). The rest are
+    # edge-only stubs (handles seen in a network but never crawled) — they have
+    # no profile data and so can never be placed on the map.
+    scraped = sum(1 for a in accounts if a.raw_data)
+
     return GeoLocationsResponse(
         points=points,
         timezone_only=tz_only,
         pending=pending,
         total_accounts=len(accounts),
+        scraped_accounts=scraped,
         located=len(located),
     )

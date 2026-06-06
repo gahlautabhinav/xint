@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import * as L from "leaflet";
-import { Clock, Loader2, MapPin, Search } from "lucide-react";
+import { Clock, Loader2, MapPin, Search, X } from "lucide-react";
 
 import { api } from "@/lib/api";
-import type { GeoPoint } from "@/lib/types";
+import type { GeoPoint, TimezoneOnly } from "@/lib/types";
 import "leaflet/dist/leaflet.css";
 import "./geo.css";
 
@@ -12,6 +12,16 @@ const SOURCE_COLOR: Record<string, string> = {
   tweet_geo: "#00c2ff", // actual tagged post location
   profile: "#ff6b35", // claimed profile location
 };
+
+const TZ_COLOR = "#f5a623"; // timezone-inferred (longitude only, approximate)
+
+// Timezone gives longitude only — latitude is unknown. Spread stacked markers
+// down the meridian deterministically (by index) so same-offset accounts don't
+// fully overlap, while staying in a believable inhabited band.
+function tzLat(index: number): number {
+  const steps = [12, 36, -12, 24, -24, 0, 48, -36];
+  return steps[index % steps.length];
+}
 
 const CONFIDENCE_OPACITY: Record<string, number> = {
   high: 1,
@@ -56,19 +66,39 @@ function popupHtml(p: GeoPoint): string {
     </div>`;
 }
 
+function tzPopupHtml(t: TimezoneOnly): string {
+  const sign = t.timezone_utc_offset >= 0 ? "+" : "";
+  return `
+    <div class="geo-pop">
+      <a class="geo-pop__handle" href="/?q=${encodeURIComponent(t.username)}">@${escapeHtml(t.username)}</a>
+      ${t.display_name ? `<div class="geo-pop__name">${escapeHtml(t.display_name)}</div>` : ""}
+      <div class="geo-pop__row geo-pop__approx">Approximate — inferred from posting timezone</div>
+      <div class="geo-pop__loc">UTC${sign}${t.timezone_utc_offset} · longitude ~${Math.round(t.approx_longitude)}°</div>
+      <div class="geo-pop__row">Latitude unknown (placed on the meridian).</div>
+      <div class="geo-pop__tags">
+        <span class="geo-pop__tag" style="--c:${TZ_COLOR}">timezone</span>
+        <span class="geo-pop__tag geo-pop__tag--conf">approx</span>
+      </div>
+    </div>`;
+}
+
 export function GeoMapPage() {
   const [search, setSearch] = useState("");
+  const [seedInput, setSeedInput] = useState("");
+  const [seed, setSeed] = useState("");
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const layerRef = useRef<L.LayerGroup | null>(null);
   const markersRef = useRef<Map<string, L.Marker>>(new Map());
 
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ["geo-locations"],
-    queryFn: () => api.getGeoLocations({ maxNew: 8 }),
+    queryKey: ["geo-locations", seed],
+    queryFn: () => api.getGeoLocations({ maxNew: 8, seed: seed || undefined }),
     // Keep polling while the geocoder warms the cache, then stop.
     refetchInterval: (q) => ((q.state.data?.pending ?? 0) > 0 ? 3000 : false),
   });
+
+  const applySeed = (raw: string) => setSeed(raw.replace(/^@/, "").trim().toLowerCase());
 
   // ── Init map once ───────────────────────────────────────────────────────
   useEffect(() => {
@@ -121,7 +151,25 @@ export function GeoMapPage() {
       marker.addTo(layer);
       markersRef.current.set(p.username, marker);
     }
-  }, [data?.points]);
+
+    // Timezone-only accounts: a hollow diamond on the inferred longitude band.
+    const tz = data?.timezone_only ?? [];
+    tz.forEach((t, i) => {
+      const icon = L.divIcon({
+        className: "geo-pin-wrap",
+        html: `<span class="geo-pin geo-pin--tz" style="--c:${TZ_COLOR}"></span>`,
+        iconSize: [16, 16],
+        iconAnchor: [8, 8],
+      });
+      const marker = L.marker([tzLat(i), t.approx_longitude], {
+        icon,
+        title: `@${t.username} (timezone ~${Math.round(t.approx_longitude)}°)`,
+      });
+      marker.bindPopup(tzPopupHtml(t), { className: "geo-popup" });
+      marker.addTo(layer);
+      markersRef.current.set(`tz:${t.username}`, marker);
+    });
+  }, [data?.points, data?.timezone_only]);
 
   const filteredPoints = useMemo(() => {
     const pts = data?.points ?? [];
@@ -141,9 +189,19 @@ export function GeoMapPage() {
     markersRef.current.get(p.username)?.openPopup();
   };
 
+  const flyToTz = (t: TimezoneOnly, index: number) => {
+    const map = mapRef.current;
+    if (!map) return;
+    map.flyTo([tzLat(index), t.approx_longitude], 4, { duration: 0.8 });
+    markersRef.current.get(`tz:${t.username}`)?.openPopup();
+  };
+
   const points = data?.points ?? [];
   const tzOnly = data?.timezone_only ?? [];
   const pending = data?.pending ?? 0;
+  const total = data?.total_accounts ?? 0;
+  const scraped = data?.scraped_accounts ?? 0;
+  const uncrawled = Math.max(0, total - scraped);
 
   return (
     <div className="geo-page">
@@ -152,25 +210,78 @@ export function GeoMapPage() {
         <div className="geo-panel__head">
           <span className="eyebrow">OSINT&nbsp;//&nbsp;GEO&nbsp;MAP</span>
           <p className="body-sm text-mute geo-panel__lead">
-            Accounts pinned by geocoded profile location and tagged post
-            locations. Coordinates resolved via OpenStreetMap Nominatim.
+            Accounts pinned by geocoded profile location (via OpenStreetMap
+            Nominatim). Accounts with no usable location are placed on their
+            inferred longitude from posting timezone — approximate, latitude
+            unknown.
           </p>
+        </div>
+
+        {/* Seed scope */}
+        <div className="geo-seed">
+          <span className="eyebrow eyebrow--sm">Scope to a seed's network</span>
+          <div className="geo-seed__row">
+            <div className="geo-search searchbar">
+              <span className="searchbar__icon">
+                <Search size={14} />
+              </span>
+              <input
+                className="searchbar__input"
+                value={seedInput}
+                onChange={(e) => setSeedInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") applySeed(seedInput);
+                }}
+                placeholder="seed handle + Enter (blank = all)"
+                autoComplete="off"
+                spellCheck={false}
+              />
+            </div>
+            {seed && (
+              <button
+                type="button"
+                className="geo-seed__clear"
+                onClick={() => {
+                  setSeed("");
+                  setSeedInput("");
+                }}
+                title="Clear scope — show all accounts"
+              >
+                <X size={13} />
+              </button>
+            )}
+          </div>
+          {seed && (
+            <span className="geo-seed__active mono">
+              network of @{seed}
+            </span>
+          )}
         </div>
 
         <div className="geo-stats">
           <div className="geo-stat">
-            <span className="geo-stat__num tabular">{points.length}</span>
-            <span className="geo-stat__label">located</span>
+            <span className="geo-stat__num tabular">{points.length + tzOnly.length}</span>
+            <span className="geo-stat__label">on map</span>
           </div>
           <div className="geo-stat">
-            <span className="geo-stat__num tabular">{data?.total_accounts ?? 0}</span>
-            <span className="geo-stat__label">accounts</span>
+            <span className="geo-stat__num tabular">{scraped}</span>
+            <span className="geo-stat__label">crawled</span>
           </div>
           <div className="geo-stat">
-            <span className="geo-stat__num tabular">{tzOnly.length}</span>
-            <span className="geo-stat__label">tz only</span>
+            <span className="geo-stat__num tabular">{total}</span>
+            <span className="geo-stat__label">total</span>
           </div>
         </div>
+
+        {uncrawled > 0 && (
+          <p className="body-sm text-mute geo-note">
+            {uncrawled.toLocaleString()} of {total.toLocaleString()} accounts are
+            edge-only (seen in a network but never crawled) — they have no
+            profile, so they can't be placed. Crawl them (higher depth, or seed a
+            job on them) to map more. Per-tweet GPS no longer exists on X, so
+            there are no post-level pins.
+          </p>
+        )}
 
         {pending > 0 && (
           <div className="geo-pending">
@@ -181,12 +292,21 @@ export function GeoMapPage() {
 
         <div className="geo-legend">
           <span className="geo-legend__item">
-            <span className="geo-legend__dot" style={{ background: SOURCE_COLOR.tweet_geo }} />
-            <span className="mono">post location</span>
-          </span>
-          <span className="geo-legend__item">
             <span className="geo-legend__dot" style={{ background: SOURCE_COLOR.profile }} />
             <span className="mono">profile</span>
+          </span>
+          {points.some((p) => p.source === "tweet_geo") && (
+            <span className="geo-legend__item">
+              <span className="geo-legend__dot" style={{ background: SOURCE_COLOR.tweet_geo }} />
+              <span className="mono">post location</span>
+            </span>
+          )}
+          <span className="geo-legend__item">
+            <span
+              className="geo-legend__dot geo-legend__dot--tz"
+              style={{ background: TZ_COLOR }}
+            />
+            <span className="mono">timezone (approx)</span>
           </span>
         </div>
 
@@ -227,7 +347,9 @@ export function GeoMapPage() {
           {filteredPoints.length === 0 && !isLoading && (
             <p className="body-sm text-mute geo-list__empty">
               {points.length === 0
-                ? "No accounts geocoded yet. Crawl some accounts that have a location set."
+                ? seed
+                  ? `No located accounts in @${seed}'s network yet. Open it in Explorer and hit “Discover All” to crawl its accounts.`
+                  : "No accounts geocoded yet. Crawl some accounts that have a location set."
                 : "No matches."}
             </p>
           )}
@@ -240,14 +362,19 @@ export function GeoMapPage() {
               <Clock size={11} /> Located by timezone only
             </span>
             <div className="geo-tzlist">
-              {tzOnly.slice(0, 40).map((t) => (
-                <div key={t.username} className="geo-tzrow">
+              {tzOnly.slice(0, 40).map((t, i) => (
+                <button
+                  key={t.username}
+                  type="button"
+                  className="geo-tzrow"
+                  onClick={() => flyToTz(t, i)}
+                >
                   <span className="mono geo-tzrow__handle">@{t.username}</span>
                   <span className="mono text-mute">
                     UTC{t.timezone_utc_offset >= 0 ? "+" : ""}
                     {t.timezone_utc_offset} · ~{Math.round(t.approx_longitude)}°
                   </span>
-                </div>
+                </button>
               ))}
             </div>
           </div>

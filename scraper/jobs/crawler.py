@@ -41,6 +41,13 @@ class CrawlerConfig:
     # Scrape the followers list (inbound FOLLOWS edges: follower → this account).
     scrape_followers: bool = True
     max_followers: int = 50
+    # Enrichment ("Discover All") mode: crawl this explicit set of handles
+    # instead of BFS-expanding from the seed. When set, the queue is seeded with
+    # these handles (depth 0) rather than the seed username.
+    target_usernames: list[str] | None = None
+    # When False, newly-discovered handles are NOT enqueued — the crawl visits
+    # only the initial frontier and stops (no graph growth). Used by enrichment.
+    expand: bool = True
 
 
 def _proxies_from_urls(urls: list[str]) -> list[Proxy]:
@@ -133,7 +140,11 @@ class AccountCrawler:
         # regardless of how many succeed, preventing an infinite loop when every
         # scrape fails.
         visited: set[str] = set()
-        queue: deque[tuple[str, int]] = deque([(config.seed_username.lower(), 0)])
+        if config.target_usernames:
+            # Enrichment mode: crawl an explicit handle set (all at depth 0).
+            queue = deque((u.lower(), 0) for u in config.target_usernames)
+        else:
+            queue = deque([(config.seed_username.lower(), 0)])
         accounts_scraped = 0  # successful scrapes only — stored in job record
 
         status = JobStatus.COMPLETED
@@ -207,7 +218,7 @@ class AccountCrawler:
                                 {"username": username, "depth": depth, "error": result.error},
                             )
 
-                        if depth < config.max_depth:
+                        if config.expand and depth < config.max_depth:
                             for handle in new_handles:
                                 h = handle.lower()
                                 if h not in visited:

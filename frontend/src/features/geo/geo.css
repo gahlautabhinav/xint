@@ -21,6 +21,14 @@
   overflow-y: auto;
 }
 
+/* Stop flex from compressing sections — without this each child shrinks to
+   share the panel height and their overflow:visible content paints over the
+   next section (the "cluttered overlap" bug). Children keep natural height;
+   the panel itself scrolls. */
+.geo-panel > * {
+  flex-shrink: 0;
+}
+
 .geo-panel__head {
   display: flex;
   flex-direction: column;
@@ -61,6 +69,58 @@
   letter-spacing: 0.5px;
   text-transform: uppercase;
   color: var(--c-mute);
+}
+
+.geo-note {
+  line-height: 1.55;
+  padding: var(--s-sm) var(--s-md);
+  border: 1px solid var(--c-hairline);
+  border-radius: var(--r-sm);
+  background: rgba(245, 166, 35, 0.06);
+}
+
+/* ── Seed scope ─────────────────────────────────────────────────────────── */
+.geo-seed {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-xs);
+}
+
+.geo-seed__row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-xs);
+}
+
+.geo-seed__row .geo-search {
+  flex: 1 1 auto;
+}
+
+.geo-seed__clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border: 1px solid var(--c-hairline);
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--c-mute);
+  cursor: pointer;
+  transition:
+    color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+
+.geo-seed__clear:hover {
+  color: var(--c-ink);
+  border-color: var(--c-border-strong, rgba(255, 255, 255, 0.3));
+}
+
+.geo-seed__active {
+  font-size: 11px;
+  color: var(--c-accent-breeze, #00c2ff);
 }
 
 /* ── Pending (geocoding) ────────────────────────────────────────────────── */
@@ -109,7 +169,8 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  min-height: 0;
+  max-height: 42vh;
+  overflow-y: auto;
 }
 
 .geo-list__row {
@@ -196,11 +257,25 @@
   justify-content: space-between;
   gap: var(--s-sm);
   font-size: 11px;
-  padding: 2px 4px;
+  padding: 4px;
+  width: 100%;
+  border: none;
+  background: transparent;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  text-align: left;
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+
+.geo-tzrow:hover {
+  background: var(--c-fill-translucent);
 }
 
 .geo-tzrow__handle {
   color: var(--c-body);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ── Errors ─────────────────────────────────────────────────────────────── */
@@ -267,6 +342,28 @@
   transform: scale(1.25);
 }
 
+/* Timezone-inferred marker: hollow dashed diamond (approximate, longitude-only). */
+.geo-pin--tz {
+  width: 14px;
+  height: 14px;
+  background: transparent;
+  border: 1.5px dashed var(--c);
+  border-radius: 2px;
+  transform: rotate(45deg);
+  box-shadow: none;
+  opacity: 0.85;
+}
+
+.geo-pin-wrap:hover .geo-pin--tz {
+  transform: rotate(45deg) scale(1.25);
+  background: color-mix(in srgb, var(--c) 25%, transparent);
+}
+
+.geo-legend__dot--tz {
+  border-radius: 1px;
+  transform: rotate(45deg);
+}
+
 /* ── Leaflet dark popup override ────────────────────────────────────────── */
 .geo-popup .leaflet-popup-content-wrapper {
   background: #14171c;
@@ -326,6 +423,11 @@
 
 .geo-pop__resolved {
   color: #7ed321;
+}
+
+.geo-pop__approx {
+  color: #f5a623;
+  font-style: italic;
 }
 
 .geo-pop__tags {

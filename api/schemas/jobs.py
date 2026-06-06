@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -36,6 +36,25 @@ class JobResponse(BaseModel):
 class JobListResponse(BaseModel):
     items: list[JobResponse]
     total: int
+
+
+class DiscoverRequest(BaseModel):
+    """Start an enrichment crawl of uncrawled accounts in a seed's graph."""
+
+    seed: str = Field(min_length=1, max_length=100)
+    depth: int = Field(default=2, ge=1, le=5)
+    max_accounts: int = Field(default=200, ge=1, le=2000)
+    # The crawler scrapes Twitter/X only — enforce it so discovered handles are
+    # never mislabelled or sent to the wrong site.
+    platform: Literal["twitter"] = "twitter"
+    rate_profile: str = Field(default="moderate")
+    proxy_urls: list[str] = Field(default_factory=list)
+
+
+class DiscoverResponse(BaseModel):
+    job_id: uuid.UUID | None  # None when there was nothing to crawl
+    queued: int               # how many uncrawled accounts this run will visit
+    remaining: int            # uncrawled accounts still left after this batch
 
 
 class JobEventResponse(BaseModel):

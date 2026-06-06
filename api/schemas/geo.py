@@ -32,5 +32,6 @@ class GeoLocationsResponse(BaseModel):
     points: list[GeoPointResponse]
     timezone_only: list[TimezoneOnlyResponse]
     pending: int                # unique strings not yet geocoded (poll again)
-    total_accounts: int
+    total_accounts: int         # every account row (incl. uncrawled edge stubs)
+    scraped_accounts: int       # accounts whose profile was actually fetched
     located: int

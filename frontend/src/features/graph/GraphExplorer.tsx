@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import type { ElementDefinition } from "cytoscape";
 import {
   Crosshair,
   Download,
   Network,
+  Radar,
   Search,
   Shuffle,
   Target,
@@ -31,10 +32,12 @@ const SUGGESTIONS = ["elonmusk", "sama", "naval", "balajis"];
 export function GraphExplorer() {
   const reducedMotion = usePrefersReducedMotion();
   const [params, setParams] = useSearchParams();
+  const navigate = useNavigate();
 
   const [input, setInput] = useState(params.get("q") ?? "");
   const [depth, setDepth] = useState(Number(params.get("depth")) || 2);
   const [limit, setLimit] = useState(Number(params.get("limit")) || 200);
+  const [discoverCap, setDiscoverCap] = useState(200);
 
   const initialHandle = params.get("q") ? normalizeHandle(params.get("q")!) : null;
   const [root, setRoot] = useState<{ platform: string; handle: string } | null>(
@@ -140,6 +143,26 @@ export function GraphExplorer() {
     setFocusMode(true);
     setFitSignal((s) => s + 1);
   }, []);
+
+  // ── Discover All: enrich uncrawled stubs in this graph so they're mappable ─
+  const discoverMutation = useMutation({
+    mutationFn: () =>
+      api.discoverAll({ seed: root!.handle, depth, max_accounts: discoverCap }),
+    onSuccess: (res) => {
+      if (res.queued > 0 && res.job_id) {
+        flashNotice(
+          `Discovering ${res.queued} account${res.queued > 1 ? "s" : ""}` +
+            (res.remaining > 0 ? ` (${res.remaining} more left)` : "") +
+            " — opening live progress…",
+        );
+        navigate(`/jobs/${res.job_id}`);
+      } else {
+        flashNotice("Nothing to discover — every account in this graph is already crawled.");
+      }
+    },
+    onError: (err) =>
+      flashNotice(err instanceof Error ? err.message : "Discover failed."),
+  });
 
   const toggleRel = useCallback((rel: RelType) => {
     setHiddenRel((prev) => {
@@ -327,6 +350,31 @@ export function GraphExplorer() {
         </Pill>
 
         <div className="explorer__toolbar-spacer" />
+
+        <label className="explorer__control" title="Max accounts to crawl this run">
+          <span className="eyebrow eyebrow--sm">Discover</span>
+          <input
+            className="input input--mini input--num"
+            type="number"
+            min={1}
+            max={2000}
+            value={discoverCap}
+            onChange={(e) => {
+              const v = parseInt(e.target.value, 10);
+              if (!isNaN(v) && v >= 1) setDiscoverCap(v);
+            }}
+          />
+        </label>
+        <Pill
+          size="sm"
+          variant="primary"
+          icon={<Radar size={14} />}
+          onClick={() => discoverMutation.mutate()}
+          disabled={!hasGraph || discoverMutation.isPending}
+          title="Crawl uncrawled accounts in this graph so they can be located on the map"
+        >
+          {discoverMutation.isPending ? "Starting…" : "Discover All"}
+        </Pill>
 
         <Pill
           size="sm"
