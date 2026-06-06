@@ -17,11 +17,24 @@ import {
 } from "lucide-react";
 
 import { api } from "@/lib/api";
-import type { PivotLink } from "@/lib/types";
+import type { BiasVerdict, PivotLink } from "@/lib/types";
 import { formatFull, formatDate } from "@/lib/format";
 import { Pill } from "@/components/Pill";
 import { ErrorState, LoadingState } from "@/components/states";
+import "../bias/bias.css";
 import "./dossier.css";
+
+const BIAS_FLAG_LABELS: { key: keyof BiasVerdict; label: string }[] = [
+  { key: "is_antisemitic",            label: "Antisemitic" },
+  { key: "is_anti_jew",               label: "Anti-Jewish" },
+  { key: "is_anti_israel",            label: "Anti-Israel" },
+  { key: "is_anti_zionist",           label: "Anti-Zionist" },
+  { key: "is_pro_islamist_extremist", label: "Pro-Islamist Extremism" },
+  { key: "is_pro_hamas_hezbollah",    label: "Pro-Hamas/Hezbollah" },
+  { key: "is_pro_palestine",          label: "Pro-Palestine" },
+  { key: "is_white_supremacist",      label: "White Supremacist" },
+  { key: "is_neo_nazi",               label: "Neo-Nazi" },
+];
 
 function bigAvatar(url: string | null | undefined): string | null {
   if (!url) return null;
@@ -82,6 +95,20 @@ export function DossierPage() {
     queryFn: () => api.resolveIdentity(handle),
     retry: false,
     staleTime: 5 * 60_000,
+  });
+
+  const biasStatusQuery = useQuery({
+    queryKey: ["bias-status"],
+    queryFn: api.getBiasStatus,
+    staleTime: 30_000,
+  });
+
+  const biasQuery = useQuery({
+    queryKey: ["bias-flags", handle],
+    queryFn: () => api.getBiasFlags(handle),
+    retry: false,
+    staleTime: 5 * 60_000,
+    enabled: biasStatusQuery.data?.connected === true,
   });
 
   const account = accountQuery.data;
@@ -382,6 +409,58 @@ export function DossierPage() {
               Opens third-party search tools. Verify before concluding.
             </p>
           </section>
+
+          {/* ── Bias analysis ── */}
+          {biasStatusQuery.data?.connected && (
+            <section className="dossier__card">
+              <h2 className="dossier__section-title">
+                <ShieldAlert size={14} /> Bias Analysis
+                <span
+                  className="bias-dot bias-dot--online"
+                  aria-label="bias agent online"
+                  title="xint-bias-agent connected"
+                  style={{ marginLeft: 6 }}
+                />
+              </h2>
+              {biasQuery.isLoading ? (
+                <span className="dossier__loading mono">
+                  <Loader2 size={13} className="spin" /> querying bias agent…
+                </span>
+              ) : !biasQuery.data?.analyzed ? (
+                <p className="dossier__empty mono">
+                  Not analyzed yet — will run after next crawl of @{handle}.
+                </p>
+              ) : biasQuery.data.verdict ? (
+                <>
+                  {(() => {
+                    const activeFlags = BIAS_FLAG_LABELS.filter(
+                      ({ key }) => biasQuery.data!.verdict![key] === true,
+                    );
+                    return activeFlags.length > 0 ? (
+                      <div className="dossier__bias-flags">
+                        {activeFlags.map(({ key, label }) => (
+                          <span key={key} className="dossier__bias-flag">{label}</span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="dossier__empty mono">No bias flags raised.</p>
+                    );
+                  })()}
+                  <span className="dossier__bias-conf mono">
+                    confidence: {Math.round((biasQuery.data.verdict.confidence) * 100)}%
+                  </span>
+                  {biasQuery.data.verdict.evidence && (
+                    <p className="dossier__bias-evidence mono">
+                      {biasQuery.data.verdict.evidence}
+                    </p>
+                  )}
+                </>
+              ) : null}
+              <p className="dossier__note mono">
+                AI-generated classification · verify independently.
+              </p>
+            </section>
+          )}
         </div>
         </>
       ) : null}

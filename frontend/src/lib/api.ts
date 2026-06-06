@@ -8,6 +8,8 @@
 import type {
   Account,
   AccountListResponse,
+  BiasAccountRow,
+  BiasStatus,
   DiscoverResponse,
   GeoLocationsResponse,
   HashtagAnalysisResponse,
@@ -238,6 +240,18 @@ export const api = {
 
   resolveIdentity(username: string): Promise<IdentityResponse> {
     return request<IdentityResponse>(`/enrich/identity`, { params: { username } });
+  },
+
+  getBiasStatus(): Promise<BiasStatus> {
+    return request<BiasStatus>(`/enrich/bias/status`);
+  },
+
+  listBiasFlags(): Promise<BiasAccountRow[]> {
+    return request<BiasAccountRow[]>(`/enrich/bias`);
+  },
+
+  getBiasFlags(username: string): Promise<BiasAccountRow> {
+    return request<BiasAccountRow>(`/enrich/bias/${encodeURIComponent(username)}`);
   },
 
   health(): Promise<{ status: string }> {

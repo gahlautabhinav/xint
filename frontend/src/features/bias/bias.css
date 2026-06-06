@@ -1,0 +1,251 @@
+/* =============================================================================
+   Bias Agent Page
+   ============================================================================= */
+
+.bias-status-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--s-md);
+  padding: var(--s-md) var(--s-lg);
+  border: 1px solid var(--c-hairline);
+  border-radius: var(--r-md, 12px);
+  background: var(--c-canvas-card);
+  margin-bottom: var(--s-lg);
+}
+
+.bias-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  padding: 3px 9px;
+  border-radius: var(--r-pill);
+  border: 1px solid;
+}
+
+.bias-badge--online {
+  color: #7ed321;
+  border-color: rgba(126, 211, 33, 0.4);
+  background: rgba(126, 211, 33, 0.08);
+}
+
+.bias-badge--offline {
+  color: var(--c-mute);
+  border-color: var(--c-hairline);
+  background: transparent;
+}
+
+.bias-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.bias-dot--online {
+  background: #7ed321;
+  box-shadow: 0 0 5px rgba(126, 211, 33, 0.5);
+}
+
+.bias-dot--offline {
+  background: var(--c-mute);
+}
+
+/* ── Setup card ─────────────────────────────────────────────────────────── */
+.bias-setup-card {
+  display: flex;
+  gap: var(--s-lg);
+  padding: var(--s-lg);
+  border: 1px dashed var(--c-hairline);
+  border-radius: var(--r-md, 12px);
+  background: var(--c-canvas-card);
+  margin-bottom: var(--s-lg);
+  color: var(--c-mute);
+}
+
+.bias-setup-card p {
+  margin: 0 0 4px;
+  font-size: 13px;
+}
+
+.bias-setup-card code {
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  background: var(--c-fill-translucent);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+/* ── Table ──────────────────────────────────────────────────────────────── */
+.bias-table-wrap {
+  overflow-x: auto;
+}
+
+.bias-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.bias-table th {
+  text-align: left;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--c-mute);
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--c-hairline);
+}
+
+.bias-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--c-hairline);
+  vertical-align: top;
+}
+
+.bias-table tr:last-child td {
+  border-bottom: none;
+}
+
+.bias-table tr:hover td {
+  background: var(--c-fill-translucent);
+}
+
+.bias-handle-link {
+  color: var(--c-accent-breeze, #00c2ff);
+  text-decoration: none;
+  font-family: var(--font-mono, monospace);
+}
+
+.bias-handle-link:hover {
+  text-decoration: underline;
+}
+
+/* ── Flag chips ─────────────────────────────────────────────────────────── */
+.bias-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.bias-flag {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  font-family: var(--font-mono, monospace);
+  padding: 2px 7px;
+  border-radius: var(--r-pill);
+  background: rgba(255, 80, 80, 0.12);
+  border: 1px solid rgba(255, 80, 80, 0.35);
+  color: #ff6b6b;
+  white-space: nowrap;
+}
+
+.bias-flag--none {
+  color: var(--c-mute);
+  font-style: italic;
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 11px;
+}
+
+/* ── Confidence bar ─────────────────────────────────────────────────────── */
+.bias-conf {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 60px;
+}
+
+.bias-conf__bar {
+  height: 3px;
+  border-radius: 2px;
+  background: var(--c-fill-translucent);
+  overflow: hidden;
+}
+
+.bias-conf__fill {
+  height: 100%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #7ed321, #f5a623);
+  transition: width 0.3s var(--ease-out);
+}
+
+.bias-conf__pct {
+  font-size: 10px;
+  font-family: var(--font-mono, monospace);
+  color: var(--c-mute);
+}
+
+/* ── Evidence ───────────────────────────────────────────────────────────── */
+.bias-evidence {
+  font-size: 11px;
+  font-family: var(--font-mono, monospace);
+  color: var(--c-mute);
+  max-width: 340px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Empty / loading states ─────────────────────────────────────────────── */
+.bias-empty {
+  padding: var(--s-xl) 0;
+  text-align: center;
+  color: var(--c-mute);
+  font-size: 13px;
+  font-family: var(--font-mono, monospace);
+}
+
+/* ── Dossier bias card ──────────────────────────────────────────────────── */
+.dossier__bias-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.dossier__bias-flag {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  font-family: var(--font-mono, monospace);
+  padding: 3px 8px;
+  border-radius: var(--r-pill);
+  background: rgba(255, 80, 80, 0.12);
+  border: 1px solid rgba(255, 80, 80, 0.35);
+  color: #ff6b6b;
+}
+
+.dossier__bias-conf {
+  font-size: 11px;
+  font-family: var(--font-mono, monospace);
+  color: var(--c-mute);
+}
+
+.dossier__bias-evidence {
+  font-size: 11px;
+  font-family: var(--font-mono, monospace);
+  color: var(--c-mute);
+  line-height: 1.45;
+}
+
+/* ── Nav status dot ─────────────────────────────────────────────────────── */
+.nav__bias-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+
+.nav__bias-dot--online {
+  background: #7ed321;
+  box-shadow: 0 0 4px rgba(126, 211, 33, 0.6);
+}
+
+.nav__bias-dot--offline {
+  background: var(--c-mute);
+}

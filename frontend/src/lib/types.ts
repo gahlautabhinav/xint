@@ -242,6 +242,33 @@ export interface GeoLocationsResponse {
   located: number;
 }
 
+// ── Bias Agent ────────────────────────────────────────────────────────────
+export interface BiasVerdict {
+  is_antisemitic: boolean;
+  is_anti_jew: boolean;
+  is_anti_israel: boolean;
+  is_anti_zionist: boolean;
+  is_pro_islamist_extremist: boolean;
+  is_pro_hamas_hezbollah: boolean;
+  is_pro_palestine: boolean;
+  is_white_supremacist: boolean;
+  is_neo_nazi: boolean;
+  evidence: string;
+  confidence: number;
+}
+
+export interface BiasAccountRow {
+  username: string;
+  analyzed: boolean;
+  verdict: BiasVerdict | null;
+  updated_at: string | null;
+}
+
+export interface BiasStatus {
+  connected: boolean;
+  url: string | null;
+}
+
 // ── Hashtags ───────────────────────────────────────────────────────────
 export interface HashtagCount {
   tag: string;

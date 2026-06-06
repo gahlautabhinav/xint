@@ -1,5 +1,6 @@
 import { Route, Routes } from "react-router-dom";
 import { NavBar } from "./components/NavBar";
+import { BiasPage } from "./features/bias/BiasPage";
 import { DossierPage } from "./features/enrich/DossierPage";
 import { GeoMapPage } from "./features/geo/GeoMapPage";
 import { GraphExplorer } from "./features/graph/GraphExplorer";
@@ -21,6 +22,7 @@ export function App() {
           <Route path="/hashtags" element={<HashtagsPage />} />
           <Route path="/intersection" element={<IntersectionPage />} />
           <Route path="/geo" element={<GeoMapPage />} />
+          <Route path="/bias" element={<BiasPage />} />
           <Route path="/dossier/:platform/:handle" element={<DossierPage />} />
           <Route path="*" element={<GraphExplorer />} />
         </Routes>

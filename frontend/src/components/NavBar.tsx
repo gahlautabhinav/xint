@@ -1,5 +1,8 @@
 import { NavLink } from "react-router-dom";
-import { Activity, GitMerge, Hash, MapPin, Network, Users } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { Activity, GitMerge, Hash, MapPin, Network, ShieldAlert, Users } from "lucide-react";
+import { api } from "@/lib/api";
+import "../features/bias/bias.css";
 
 const LINKS = [
   { to: "/", label: "Explorer", icon: Network, end: true },
@@ -9,6 +12,23 @@ const LINKS = [
   { to: "/intersection", label: "Intersection", icon: GitMerge, end: false },
   { to: "/geo", label: "Geo Map", icon: MapPin, end: false },
 ];
+
+function BiasStatusDot() {
+  const { data } = useQuery({
+    queryKey: ["bias-status"],
+    queryFn: api.getBiasStatus,
+    refetchInterval: 30_000,
+    staleTime: 15_000,
+  });
+  const online = data?.connected === true;
+  return (
+    <span
+      className={`nav__bias-dot ${online ? "nav__bias-dot--online" : "nav__bias-dot--offline"}`}
+      title={online ? "Bias agent: online" : "Bias agent: offline"}
+      aria-hidden
+    />
+  );
+}
 
 export function NavBar() {
   return (
@@ -35,6 +55,17 @@ export function NavBar() {
             <span>{label}</span>
           </NavLink>
         ))}
+        <NavLink
+          to="/bias"
+          end={false}
+          className={({ isActive }) =>
+            `nav__link${isActive ? " nav__link--active" : ""}`
+          }
+        >
+          <ShieldAlert size={15} strokeWidth={1.75} aria-hidden />
+          <span>Bias</span>
+          <BiasStatusDot />
+        </NavLink>
       </nav>
 
       <a

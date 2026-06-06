@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import httpx
 from fastapi import APIRouter, HTTPException, Query, status
 
 from api.dependencies import ApiKeyCheck, DbSession
 from api.schemas.enrich import (
+    BiasAccountResponse,
+    BiasStatusResponse,
+    BiasVerdictResponse,
     IdentityHitResponse,
     IdentityResponse,
     LinkedAccountResponse,
@@ -12,6 +16,7 @@ from api.schemas.enrich import (
     SiteResultResponse,
     UsernameEnumResponse,
 )
+from config.settings import get_settings
 from scraper.enrich.identity import resolve_identity
 from scraper.enrich.pivots import build_pivots
 from scraper.enrich.username_enum import enumerate_username, is_valid_username
@@ -88,6 +93,74 @@ async def get_identity(
             )
             for h in hits
         ],
+    )
+
+
+@router.get("/bias/status", response_model=BiasStatusResponse)
+async def bias_status(_key: ApiKeyCheck) -> BiasStatusResponse:
+    """Check whether the xint-bias-agent is reachable."""
+    url = get_settings().BIAS_AGENT_URL
+    if not url:
+        return BiasStatusResponse(connected=False, url=None)
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            resp = await client.get(f"{url}/health")
+        return BiasStatusResponse(connected=resp.status_code == 200, url=url)
+    except Exception:
+        return BiasStatusResponse(connected=False, url=url)
+
+
+@router.get("/bias", response_model=list[BiasAccountResponse])
+async def list_bias_flags(_key: ApiKeyCheck) -> list[BiasAccountResponse]:
+    """Return all accounts the bias agent has analyzed, newest first."""
+    url = get_settings().BIAS_AGENT_URL
+    if not url:
+        raise HTTPException(status_code=503, detail="Bias agent not configured — set BIAS_AGENT_URL in .env")
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(f"{url}/flags")
+        resp.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"Bias agent unreachable: {exc}") from exc
+    return [
+        BiasAccountResponse(
+            username=r["username"],
+            analyzed=True,
+            verdict=BiasVerdictResponse.model_validate(r),
+            updated_at=r.get("updated_at"),
+        )
+        for r in resp.json()
+    ]
+
+
+@router.get("/bias/{username}", response_model=BiasAccountResponse)
+async def get_bias_flags(
+    username: str,
+    _key: ApiKeyCheck,
+) -> BiasAccountResponse:
+    """Return bias flags for a specific handle from the bias agent."""
+    bare = username.lstrip("@").strip()
+    if not is_valid_username(bare):
+        raise HTTPException(status_code=400, detail="Invalid username")
+    url = get_settings().BIAS_AGENT_URL
+    if not url:
+        raise HTTPException(status_code=503, detail="Bias agent not configured — set BIAS_AGENT_URL in .env")
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(f"{url}/flags/{bare}")
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"Bias agent unreachable: {exc}") from exc
+    if resp.status_code == 404:
+        return BiasAccountResponse(username=bare, analyzed=False)
+    resp.raise_for_status()
+    data = resp.json()
+    return BiasAccountResponse(
+        username=bare,
+        analyzed=True,
+        verdict=BiasVerdictResponse.model_validate(data),
+        updated_at=data.get("updated_at"),
     )
 
 

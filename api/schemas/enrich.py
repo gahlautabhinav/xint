@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class SiteResultResponse(BaseModel):
@@ -53,3 +53,31 @@ class IdentityHitResponse(BaseModel):
 class IdentityResponse(BaseModel):
     username: str
     hits: list[IdentityHitResponse]
+
+
+# ── Bias agent ────────────────────────────────────────────────────────────────
+
+class BiasVerdictResponse(BaseModel):
+    is_antisemitic: bool = False
+    is_anti_jew: bool = False
+    is_anti_israel: bool = False
+    is_anti_zionist: bool = False
+    is_pro_islamist_extremist: bool = False
+    is_pro_hamas_hezbollah: bool = False
+    is_pro_palestine: bool = False
+    is_white_supremacist: bool = False
+    is_neo_nazi: bool = False
+    evidence: str = ""
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+
+
+class BiasAccountResponse(BaseModel):
+    username: str
+    analyzed: bool
+    verdict: BiasVerdictResponse | None = None
+    updated_at: str | None = None
+
+
+class BiasStatusResponse(BaseModel):
+    connected: bool
+    url: str | None = None
