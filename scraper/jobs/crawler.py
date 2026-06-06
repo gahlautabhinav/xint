@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import uuid
 from collections import Counter, deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from urllib.parse import urlparse
+
+import httpx
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -26,6 +29,29 @@ from storage.repositories.relationship_repo import RelationshipRepository
 __all__ = ["AccountCrawler", "CrawlerConfig", "CrawlJob", "JobStatus"]
 
 logger = logging.getLogger(__name__)
+
+
+async def _trigger_bias_agent(username: str, tweets: list, agent_url: str) -> None:
+    """POST scraped tweets to xint-bias-agent for bias classification. Fire-and-forget.
+
+    A down or slow agent must never block or crash a crawl — all errors are logged and swallowed.
+    """
+    payload = {
+        "username": username,
+        "tweets": [
+            {
+                "id": t.tweet_id,
+                "text": t.text,
+                "timestamp": str(t.timestamp) if t.timestamp else None,
+            }
+            for t in tweets
+        ],
+    }
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            await client.post(f"{agent_url}/analyze", json=payload)
+    except Exception as exc:
+        logger.warning("Bias agent unreachable for @%s: %s", username, exc)
 
 
 @dataclass
@@ -106,6 +132,8 @@ class AccountCrawler:
         the path used by the CLI and tests.
         """
         config = self._config
+        from config.settings import get_settings
+        bias_agent_url: str | None = get_settings().BIAS_AGENT_URL
         rate_profile = get_profile(config.rate_profile_name)
         bucket = TokenBucket(
             capacity=rate_profile.burst_capacity,
@@ -211,6 +239,10 @@ class AccountCrawler:
                                     "new_edges": len(new_handles),
                                 },
                             )
+                            if bias_agent_url and result.tweets:
+                                asyncio.create_task(
+                                    _trigger_bias_agent(username, result.tweets, bias_agent_url)
+                                )
                         else:
                             await self._emit(
                                 job_id,

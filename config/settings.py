@@ -56,6 +56,11 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     LOG_FILE: str | None = None
 
+    # Bias agent (optional — connect xint-bias-agent MCP service)
+    # Set to the agent's base URL to enable: BIAS_AGENT_URL=http://127.0.0.1:5000
+    # Leave unset (default) to disable — crawler works normally without it.
+    BIAS_AGENT_URL: str | None = None
+
 
 @functools.lru_cache(maxsize=1)
 def get_settings() -> Settings:
