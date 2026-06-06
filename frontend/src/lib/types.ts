@@ -188,6 +188,29 @@ export interface PivotsResponse {
   links: PivotLink[];
 }
 
+export interface LinkedAccount {
+  service: string | null;
+  value: string | null;
+  url: string | null;
+}
+
+export interface IdentityHit {
+  source: string; // "github" | "gitlab" | "keybase"
+  url: string | null;
+  real_name: string | null;
+  location: string | null;
+  company: string | null;
+  bio: string | null;
+  email: string | null;
+  linked_accounts: LinkedAccount[];
+  extra: Record<string, unknown>;
+}
+
+export interface IdentityResponse {
+  username: string;
+  hits: IdentityHit[];
+}
+
 // ── Geo ────────────────────────────────────────────────────────────────
 export interface GeoPoint {
   username: string;

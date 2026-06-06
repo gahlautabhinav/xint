@@ -824,6 +824,48 @@ class TestPivots:
 
 
 # ---------------------------------------------------------------------------
+# GET /enrich/identity
+# ---------------------------------------------------------------------------
+
+
+class TestIdentity:
+    async def test_returns_hits(self, client: AsyncClient):
+        from scraper.enrich.identity import IdentityHit, LinkedAccount
+
+        fake = AsyncMock(
+            return_value=[
+                IdentityHit(
+                    source="github",
+                    url="https://github.com/alice",
+                    real_name="Alice Real",
+                    location="NYC",
+                    linked_accounts=[LinkedAccount("twitter", "alice", "https://x.com/alice")],
+                ),
+                IdentityHit(source="keybase", real_name="Alice R", url="https://keybase.io/alice"),
+            ]
+        )
+        with patch("api.routers.enrich.resolve_identity", fake):
+            r = await client.get("/enrich/identity?username=alice")
+        assert r.status_code == 200
+        data = r.json()
+        assert data["username"] == "alice"
+        assert {h["source"] for h in data["hits"]} == {"github", "keybase"}
+        gh = next(h for h in data["hits"] if h["source"] == "github")
+        assert gh["real_name"] == "Alice Real"
+        assert gh["linked_accounts"][0]["service"] == "twitter"
+
+    async def test_empty_when_no_reuse(self, client: AsyncClient):
+        with patch("api.routers.enrich.resolve_identity", AsyncMock(return_value=[])):
+            r = await client.get("/enrich/identity?username=ghostuser")
+        assert r.status_code == 200
+        assert r.json()["hits"] == []
+
+    async def test_rejects_invalid(self, client: AsyncClient):
+        r = await client.get("/enrich/identity?username=foo%2Fbar")
+        assert r.status_code == 400
+
+
+# ---------------------------------------------------------------------------
 # API key enforcement
 # ---------------------------------------------------------------------------
 

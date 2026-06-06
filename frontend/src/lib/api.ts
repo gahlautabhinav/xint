@@ -12,6 +12,7 @@ import type {
   GeoLocationsResponse,
   HashtagAnalysisResponse,
   IntersectionResponse,
+  IdentityResponse,
   Job,
   JobCreate,
   JobEventsResponse,
@@ -233,6 +234,10 @@ export const api = {
     return request<PivotsResponse>(
       `/enrich/pivots/${encodeURIComponent(platform)}/${encodeURIComponent(handle)}`,
     );
+  },
+
+  resolveIdentity(username: string): Promise<IdentityResponse> {
+    return request<IdentityResponse>(`/enrich/identity`, { params: { username } });
   },
 
   health(): Promise<{ status: string }> {

@@ -4,11 +4,15 @@ from fastapi import APIRouter, HTTPException, Query, status
 
 from api.dependencies import ApiKeyCheck, DbSession
 from api.schemas.enrich import (
+    IdentityHitResponse,
+    IdentityResponse,
+    LinkedAccountResponse,
     PivotLinkResponse,
     PivotsResponse,
     SiteResultResponse,
     UsernameEnumResponse,
 )
+from scraper.enrich.identity import resolve_identity
 from scraper.enrich.pivots import build_pivots
 from scraper.enrich.username_enum import enumerate_username, is_valid_username
 from storage.repositories.account_repo import AccountRepository
@@ -42,6 +46,47 @@ async def enum_username(
         results=[
             SiteResultResponse(name=r.name, category=r.category, url=r.url, status=r.status)
             for r in results
+        ],
+    )
+
+
+@router.get("/identity", response_model=IdentityResponse)
+async def get_identity(
+    _key: ApiKeyCheck,
+    username: str = Query(..., min_length=1, max_length=40),
+) -> IdentityResponse:
+    """Resolve a handle to real-identity data via public APIs (GitHub/GitLab/Keybase).
+
+    When the handle was reused on one of these services, returns the real name,
+    location, company and self-asserted linked accounts it publishes. A miss
+    means the handle wasn't found there. Public self-published data only.
+    """
+    handle = username.lstrip("@").strip()
+    if not is_valid_username(handle):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid username: only letters, digits, '_', '.', '-' are allowed",
+        )
+
+    hits = await resolve_identity(handle)
+    return IdentityResponse(
+        username=handle,
+        hits=[
+            IdentityHitResponse(
+                source=h.source,
+                url=h.url,
+                real_name=h.real_name,
+                location=h.location,
+                company=h.company,
+                bio=h.bio,
+                email=h.email,
+                linked_accounts=[
+                    LinkedAccountResponse(service=la.service, value=la.value, url=la.url)
+                    for la in h.linked_accounts
+                ],
+                extra=h.extra,
+            )
+            for h in hits
         ],
     )
 

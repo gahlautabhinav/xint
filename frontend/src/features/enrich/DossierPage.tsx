@@ -13,6 +13,7 @@ import {
   Network,
   Phone,
   ShieldAlert,
+  UserSearch,
 } from "lucide-react";
 
 import { api } from "@/lib/api";
@@ -76,7 +77,15 @@ export function DossierPage() {
     staleTime: 5 * 60_000,
   });
 
+  const identityQuery = useQuery({
+    queryKey: ["identity", handle],
+    queryFn: () => api.resolveIdentity(handle),
+    retry: false,
+    staleTime: 5 * 60_000,
+  });
+
   const account = accountQuery.data;
+  const identityHits = identityQuery.data?.hits ?? [];
   const links = pivotsQuery.data?.links ?? [];
   const reverseImage = links.filter((l) => l.group === "reverse_image");
   const foundSites = (enumQuery.data?.results ?? []).filter((r) => r.status === "found");
@@ -106,7 +115,73 @@ export function DossierPage() {
           }
         />
       ) : account ? (
-        <div className="dossier__grid reveal reveal-2">
+        <>
+        {/* ── Identity resolution (headline deanon) ── */}
+        <section className="dossier__identity reveal reveal-2">
+          <h2 className="dossier__section-title">
+            <UserSearch size={14} /> Identity resolution
+            <span className="dossier__id-sub mono">
+              public APIs · only when the handle was reused
+            </span>
+          </h2>
+          {identityQuery.isLoading ? (
+            <span className="dossier__loading mono">
+              <Loader2 size={13} className="spin" /> querying GitHub · GitLab · Keybase…
+            </span>
+          ) : identityHits.length === 0 ? (
+            <p className="dossier__empty mono">
+              No public identity match — @{handle} wasn't found on GitHub, GitLab
+              or Keybase (or it carries no real-name data there).
+            </p>
+          ) : (
+            <div className="dossier__id-hits">
+              {identityHits.map((h) => (
+                <div key={h.source} className="dossier__id-hit">
+                  <div className="dossier__id-hit-head">
+                    <span className="dossier__id-source mono">{h.source}</span>
+                    {h.url && (
+                      <a href={h.url} target="_blank" rel="noreferrer" className="dossier__id-link mono">
+                        open <ExternalLink size={10} />
+                      </a>
+                    )}
+                  </div>
+                  {h.real_name ? (
+                    <span className="dossier__id-name">{h.real_name}</span>
+                  ) : (
+                    <span className="dossier__id-name dossier__id-name--none">no name set</span>
+                  )}
+                  <div className="dossier__id-meta mono">
+                    {[h.company, h.location, h.email].filter(Boolean).join(" · ")}
+                  </div>
+                  {h.linked_accounts.length > 0 && (
+                    <div className="dossier__chips">
+                      {h.linked_accounts.map((la, i) =>
+                        la.url ? (
+                          <a
+                            key={`${la.service}-${i}`}
+                            href={la.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="dossier__chip mono"
+                          >
+                            <span>{la.service}: {la.value}</span>
+                            <ExternalLink size={10} />
+                          </a>
+                        ) : (
+                          <span key={`${la.service}-${i}`} className="dossier__chip mono">
+                            {la.service}: {la.value}
+                          </span>
+                        ),
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <div className="dossier__grid reveal reveal-3">
           {/* ── Profile card ── */}
           <section className="dossier__card dossier__profile">
             <div className="dossier__id">
@@ -308,6 +383,7 @@ export function DossierPage() {
             </p>
           </section>
         </div>
+        </>
       ) : null}
     </div>
   );

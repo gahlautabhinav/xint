@@ -3,6 +3,13 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from scraper.enrich.identity import (
+    IdentityHit,
+    github_identity,
+    gitlab_identity,
+    keybase_identity,
+    resolve_identity,
+)
 from scraper.enrich.pivots import (
     PivotLink,
     build_pivots,
@@ -232,3 +239,115 @@ class TestBuildPivots:
         assert not any(pl.group == "breach" for pl in links)
         # still has wayback + handle dork
         assert any("web.archive.org" in pl.url for pl in links)
+
+
+# ---------------------------------------------------------------------------
+# identity (public APIs)
+# ---------------------------------------------------------------------------
+
+
+def _resp(status: int, payload: object):
+    r = MagicMock()
+    r.status_code = status
+    r.json = MagicMock(return_value=payload)
+    return r
+
+
+def _client_returning(resp):
+    c = MagicMock()
+    c.get = AsyncMock(return_value=resp)
+    return c
+
+
+class TestGithubIdentity:
+    async def test_parses_real_name_and_links(self):
+        payload = {
+            "name": "Linus Torvalds",
+            "company": "Linux Foundation",
+            "location": "Portland, OR",
+            "bio": None,
+            "email": None,
+            "blog": "kernel.org",
+            "twitter_username": "linus__t",
+            "html_url": "https://github.com/torvalds",
+            "followers": 200000,
+            "public_repos": 7,
+            "created_at": "2011-09-03T15:26:22Z",
+        }
+        hit = await github_identity(_client_returning(_resp(200, payload)), "torvalds")
+        assert hit is not None
+        assert hit.real_name == "Linus Torvalds"
+        assert hit.company == "Linux Foundation"
+        services = {la.service for la in hit.linked_accounts}
+        assert services == {"twitter", "website"}
+        assert hit.extra["followers"] == 200000
+
+    async def test_404_returns_none(self):
+        hit = await github_identity(_client_returning(_resp(404, {})), "nobody")
+        assert hit is None
+
+
+class TestGitlabIdentity:
+    async def test_parses_first_match(self):
+        payload = [
+            {
+                "id": 5,
+                "name": "Jane Doe",
+                "web_url": "https://gitlab.com/jane",
+                "bio": "dev",
+                "location": "Berlin",
+                "organization": "Acme",
+                "state": "active",
+            }
+        ]
+        hit = await gitlab_identity(_client_returning(_resp(200, payload)), "jane")
+        assert hit is not None
+        assert hit.real_name == "Jane Doe"
+        assert hit.location == "Berlin"
+        assert hit.company == "Acme"
+
+    async def test_empty_array_none(self):
+        hit = await gitlab_identity(_client_returning(_resp(200, [])), "nobody")
+        assert hit is None
+
+
+class TestKeybaseIdentity:
+    async def test_parses_proofs(self):
+        payload = {
+            "status": {"code": 0},
+            "them": [
+                {
+                    "basics": {"username": "chris"},
+                    "profile": {"full_name": "Chris Coyne", "location": "NYC"},
+                    "proofs_summary": {
+                        "all": [
+                            {"proof_type": "twitter", "nametag": "malg", "service_url": "https://twitter.com/malg"},
+                            {"proof_type": "github", "nametag": "chris", "service_url": "https://github.com/chris"},
+                        ]
+                    },
+                }
+            ],
+        }
+        hit = await keybase_identity(_client_returning(_resp(200, payload)), "chris")
+        assert hit is not None
+        assert hit.real_name == "Chris Coyne"
+        assert hit.url == "https://keybase.io/chris"
+        services = {la.service for la in hit.linked_accounts}
+        assert services == {"twitter", "github"}
+
+    async def test_null_them_none(self):
+        hit = await keybase_identity(_client_returning(_resp(200, {"them": [None]})), "nobody")
+        assert hit is None
+
+
+class TestResolveIdentity:
+    async def test_gathers_and_drops_none(self):
+        gh = IdentityHit(source="github", real_name="A")
+        kb = IdentityHit(source="keybase", real_name="B")
+        with (
+            patch("scraper.enrich.identity.github_identity", AsyncMock(return_value=gh)),
+            patch("scraper.enrich.identity.gitlab_identity", AsyncMock(return_value=None)),
+            patch("scraper.enrich.identity.keybase_identity", AsyncMock(return_value=kb)),
+        ):
+            hits = await resolve_identity("x")
+        assert {h.source for h in hits} == {"github", "keybase"}
