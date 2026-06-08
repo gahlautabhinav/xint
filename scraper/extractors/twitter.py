@@ -124,9 +124,23 @@ _PROFILE_JS = r"""
         }
     }
 
-    // Profile image (highest-res src available)
-    const avatarImg = document.querySelector('[data-testid="UserAvatar"] img');
-    const profile_image_url = avatarImg ? avatarImg.getAttribute('src') : null;
+    // Profile image — try multiple selectors; profile header uses a different
+    // structure than the UserCell avatar used in following/followers lists.
+    let profile_image_url = null;
+    const avatarSelectors = [
+        'a[href$="/photo"] img',
+        'img[src*="pbs.twimg.com/profile_images"]',
+        '[data-testid="UserAvatar"] img',
+        '[data-testid="UserProfileHeader_Items"] img',
+    ];
+    for (const sel of avatarSelectors) {
+        const el = document.querySelector(sel);
+        if (el && el.src && el.src.includes('pbs.twimg.com')) {
+            // Upgrade to _400x400 for higher resolution
+            profile_image_url = el.src.replace(/_normal\b/, '_400x400').replace(/_bigger\b/, '_400x400');
+            break;
+        }
+    }
 
     // Tweet count from profile stats row
     const tweetStatLink = document.querySelector('a[href$="/with_replies"], a[href*="/tweets"]');
@@ -289,7 +303,7 @@ async def extract_profile(page: Page) -> ProfileData:
     # Wait for the avatar img so profile_image_url is populated — it lazy-loads
     # after bio/counts and would be null if we evaluate immediately.
     with contextlib.suppress(Exception):
-        await page.wait_for_selector('[data-testid="UserAvatar"] img', timeout=5000)
+        await page.wait_for_selector('img[src*="pbs.twimg.com/profile_images"]', timeout=5000)
     try:
         raw: dict[str, Any] = await page.evaluate(_PROFILE_JS)
     except Exception as exc:
