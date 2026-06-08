@@ -8,6 +8,7 @@
 import type {
   Account,
   AccountListResponse,
+  AnalyzeNowResponse,
   BiasAccountRow,
   BiasStatus,
   DiscoverResponse,
@@ -252,6 +253,13 @@ export const api = {
 
   getBiasFlags(username: string): Promise<BiasAccountRow> {
     return request<BiasAccountRow>(`/enrich/bias/${encodeURIComponent(username)}`);
+  },
+
+  analyzeNow(username: string): Promise<AnalyzeNowResponse> {
+    return request<AnalyzeNowResponse>(`/jobs/analyze-now`, {
+      method: "POST",
+      body: { username },
+    });
   },
 
   health(): Promise<{ status: string }> {

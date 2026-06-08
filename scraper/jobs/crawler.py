@@ -9,7 +9,6 @@ from datetime import datetime, timezone
 from urllib.parse import urlparse
 
 import httpx
-
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from graph.backends.base import AbstractGraphBackend

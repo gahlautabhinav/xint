@@ -51,6 +51,53 @@
   background: var(--c-mute);
 }
 
+/* ── Analyze Now form ────────────────────────────────────────────────────── */
+.bias-analyze-form {
+  display: flex;
+  align-items: center;
+  gap: var(--s-sm);
+  margin-bottom: var(--s-lg);
+}
+
+.bias-analyze-input {
+  flex: 1;
+  max-width: 260px;
+  padding: 6px 10px;
+  background: var(--c-canvas-card);
+  border: 1px solid var(--c-hairline);
+  border-radius: var(--r-sm, 6px);
+  color: var(--c-text);
+  font-size: 13px;
+  font-family: var(--font-mono, monospace);
+}
+
+.bias-analyze-input:focus {
+  outline: none;
+  border-color: var(--c-accent, #f97316);
+}
+
+.bias-analyze-btn {
+  padding: 6px 14px;
+  background: var(--c-accent, #f97316);
+  color: #000;
+  border: none;
+  border-radius: var(--r-sm, 6px);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.bias-analyze-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.bias-analyze-err {
+  font-size: 11px;
+  color: var(--c-danger, #ef4444);
+}
+
 /* ── Setup card ─────────────────────────────────────────────────────────── */
 .bias-setup-card {
   display: flex;

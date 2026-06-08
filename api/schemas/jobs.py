@@ -71,3 +71,15 @@ class JobEventResponse(BaseModel):
 class JobEventsResponse(BaseModel):
     events: list[JobEventResponse]
     last_sequence: int
+
+
+class AnalyzeNowRequest(BaseModel):
+    username: str = Field(min_length=1, max_length=100)
+    rate_profile: str = Field(default="moderate")
+    proxy_urls: list[str] = Field(default_factory=list)
+
+
+class AnalyzeNowResponse(BaseModel):
+    job_id: uuid.UUID
+    username: str
+    status: str

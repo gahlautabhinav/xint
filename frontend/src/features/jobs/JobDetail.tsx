@@ -63,7 +63,7 @@ export function JobDetail({ jobId }: { jobId: string }) {
     queryKey: ["jobs", jobId],
     queryFn: () => api.getJob(jobId),
     refetchInterval: (q) =>
-      q.state.data && ACTIVE.has(q.state.data.status) ? 1500 : false,
+      q.state.data && ACTIVE.has(q.state.data.status) ? 3000 : false,
     retry: false,
   });
 
@@ -86,7 +86,7 @@ export function JobDetail({ jobId }: { jobId: string }) {
     // `active` derives from the job query; the closure captures the latest value
     // each render and TanStack re-reads it after every fetch, so polling stops
     // cleanly once the job leaves an active state.
-    refetchInterval: () => (active ? 1500 : false),
+    refetchInterval: () => (active ? 3000 : false),
     // The fetch depends on lastSeqRef (a cursor), which isn't in the queryKey.
     // Without these, a remount would replay the last cached *delta* instead of
     // re-fetching the full history from since=0. refetchInterval still calls

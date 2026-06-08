@@ -1,5 +1,6 @@
-import { useQuery } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
+import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link, useNavigate } from "react-router-dom";
 import { ShieldAlert, Wifi, WifiOff } from "lucide-react";
 
 import { api } from "@/lib/api";
@@ -26,6 +27,19 @@ function activeFlags(verdict: BiasVerdict): string[] {
 }
 
 export function BiasPage() {
+  const qc = useQueryClient();
+  const navigate = useNavigate();
+  const [handle, setHandle] = useState("");
+
+  const analyzeMut = useMutation({
+    mutationFn: (username: string) => api.analyzeNow(username),
+    onSuccess: (data) => {
+      setHandle("");
+      qc.invalidateQueries({ queryKey: ["jobs"] });
+      navigate(`/jobs/${data.job_id}`);
+    },
+  });
+
   const statusQuery = useQuery({
     queryKey: ["bias-status"],
     queryFn: api.getBiasStatus,
@@ -72,6 +86,39 @@ export function BiasPage() {
           {rows.length} accounts analyzed
         </span>
       </div>
+
+      {/* ── Analyze Now ── */}
+      {connected && (
+        <form
+          className="bias-analyze-form reveal reveal-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const h = handle.trim().replace(/^@/, "");
+            if (h) analyzeMut.mutate(h);
+          }}
+        >
+          <input
+            className="bias-analyze-input"
+            type="text"
+            placeholder="@username"
+            value={handle}
+            onChange={(e) => setHandle(e.target.value)}
+            disabled={analyzeMut.isPending}
+          />
+          <button
+            className="bias-analyze-btn"
+            type="submit"
+            disabled={!handle.trim() || analyzeMut.isPending}
+          >
+            {analyzeMut.isPending ? "Queuing…" : "Analyze Now"}
+          </button>
+          {analyzeMut.isError && (
+            <span className="bias-analyze-err">
+              {(analyzeMut.error as Error).message}
+            </span>
+          )}
+        </form>
+      )}
 
       {/* ── Setup instructions when offline ── */}
       {!connected && (

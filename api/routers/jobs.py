@@ -9,6 +9,8 @@ from sqlalchemy import select
 
 from api.dependencies import ApiKeyCheck, DbSession, GraphBackend
 from api.schemas.jobs import (
+    AnalyzeNowRequest,
+    AnalyzeNowResponse,
     DiscoverRequest,
     DiscoverResponse,
     JobCreate,
@@ -165,6 +167,57 @@ async def discover_all(
     ).start()
 
     return DiscoverResponse(job_id=job_id, queued=len(batch), remaining=remaining)
+
+
+@router.post(
+    "/analyze-now",
+    status_code=status.HTTP_202_ACCEPTED,
+    response_model=AnalyzeNowResponse,
+)
+async def analyze_now(
+    body: AnalyzeNowRequest,
+    _key: ApiKeyCheck,
+    session: DbSession,
+    graph: GraphBackend,
+) -> AnalyzeNowResponse:
+    """Scrape a single Twitter account on-demand and queue bias classification.
+
+    Uses a targeted single-account crawl (no BFS expansion). The bias-agent
+    webhook fires automatically at scrape completion if BIAS_AGENT_URL is set.
+    Returns immediately (202); scrape runs in a background thread.
+    """
+    handle = body.username.lstrip("@")
+    config = CrawlerConfig(
+        seed_username=handle,
+        max_depth=1,
+        max_accounts=1,
+        rate_profile_name=body.rate_profile,  # type: ignore[arg-type]
+        proxy_urls=body.proxy_urls,
+        scrape_following=False,
+        scrape_followers=False,
+        target_usernames=[handle],
+        expand=False,
+    )
+
+    job_repo = JobRepository(session)
+    job = await job_repo.create_job(
+        seed_username=handle,
+        max_depth=1,
+        max_accounts=1,
+        status=JobStatus.PENDING,
+    )
+    await session.refresh(job)
+    job_id = job.id
+    await session.commit()
+
+    threading.Thread(
+        target=run_crawl_in_thread,
+        args=(config, graph, job_id),
+        name=f"analyze-{handle}",
+        daemon=True,
+    ).start()
+
+    return AnalyzeNowResponse(job_id=job_id, username=handle, status="queued")
 
 
 @router.get("", response_model=JobListResponse)

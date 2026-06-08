@@ -102,6 +102,12 @@ export interface JobCreate {
   proxy_urls: string[];
 }
 
+export interface AnalyzeNowResponse {
+  job_id: string;
+  username: string;
+  status: string;
+}
+
 export interface DiscoverResponse {
   job_id: string | null;
   queued: number;
