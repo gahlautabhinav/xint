@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import re
 from dataclasses import dataclass, field
@@ -285,6 +286,10 @@ async def extract_following(
 
 async def extract_profile(page: Page) -> ProfileData:
     """Extract profile data from a Twitter profile page via DOM evaluation."""
+    # Wait for the avatar img so profile_image_url is populated — it lazy-loads
+    # after bio/counts and would be null if we evaluate immediately.
+    with contextlib.suppress(Exception):
+        await page.wait_for_selector('[data-testid="UserAvatar"] img', timeout=5000)
     try:
         raw: dict[str, Any] = await page.evaluate(_PROFILE_JS)
     except Exception as exc:
