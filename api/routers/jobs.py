@@ -19,6 +19,7 @@ from api.schemas.jobs import (
     JobListResponse,
     JobResponse,
 )
+from config.settings import get_settings
 from graph.schema.nodes import make_node_id, parse_node_id
 from scraper.jobs.crawler import CrawlerConfig
 from scraper.jobs.runner import run_crawl_in_thread
@@ -218,6 +219,62 @@ async def analyze_now(
     ).start()
 
     return AnalyzeNowResponse(job_id=job_id, username=handle, status="queued")
+
+
+@router.post("/sync-bias-connections", status_code=status.HTTP_202_ACCEPTED)
+async def sync_bias_connections(
+    _key: ApiKeyCheck,
+    session: DbSession,
+) -> dict:
+    """One-time backfill: push all stored xint relationships to xint-bias-agent.
+
+    Reads every relationship row from the DB (no Twitter scraping) and POSTs
+    them to POST http://BIAS_AGENT_URL/connections/sync in a background thread.
+    Call this once after deploying to populate the bias agent's connection graph
+    from existing data.
+    """
+    import logging as _log_mod
+    import threading
+
+    import httpx as _httpx
+    from sqlalchemy import text as _text
+
+    _log = _log_mod.getLogger(__name__)
+    bias_url = get_settings().BIAS_AGENT_URL
+    if not bias_url:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="BIAS_AGENT_URL not configured")
+
+    rows = (await session.execute(_text("""
+        SELECT sa.username AS source, ta.username AS target, r.rel_type AS type
+        FROM relationship r
+        JOIN account sa ON r.source_account_id = sa.id
+        JOIN account ta ON r.target_account_id = ta.id
+        WHERE sa.platform = 'twitter' AND ta.platform = 'twitter'
+    """))).fetchall()
+
+    TYPE_MAP = {
+        "FOLLOWS": "follows",
+        "MENTIONS": "mention",
+        "REPLIES_TO": "reply",
+        "QUOTE_TWEETS": "retweet",
+        "RETWEETS": "retweet",
+    }
+
+    payload = [
+        {"source": r.source.lower(), "target": r.target.lower(), "type": TYPE_MAP[r.type]}
+        for r in rows
+        if r.type in TYPE_MAP
+    ]
+
+    def _push() -> None:
+        try:
+            resp = _httpx.post(f"{bias_url}/connections/sync", json=payload, timeout=60.0)
+            _log.info("bias-conn-sync: %s — %d edges pushed", resp.status_code, len(payload))
+        except Exception as exc:
+            _log.warning("bias-conn-sync failed: %s", exc)
+
+    threading.Thread(target=_push, name="bias-conn-sync", daemon=True).start()
+    return {"status": "syncing", "edges": len(payload)}
 
 
 @router.get("", response_model=JobListResponse)

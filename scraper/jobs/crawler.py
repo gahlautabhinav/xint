@@ -30,7 +30,12 @@ __all__ = ["AccountCrawler", "CrawlerConfig", "CrawlJob", "JobStatus"]
 logger = logging.getLogger(__name__)
 
 
-async def _trigger_bias_agent(username: str, tweets: list, agent_url: str) -> None:
+async def _trigger_bias_agent(
+    username: str,
+    tweets: list,
+    agent_url: str,
+    connections: list[dict] | None = None,
+) -> None:
     """POST scraped tweets to xint-bias-agent for bias classification. Fire-and-forget.
 
     A down or slow agent must never block or crash a crawl — all errors are logged and swallowed.
@@ -45,6 +50,7 @@ async def _trigger_bias_agent(username: str, tweets: list, agent_url: str) -> No
             }
             for t in tweets
         ],
+        "connections": connections or [],
     }
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
@@ -239,8 +245,13 @@ class AccountCrawler:
                                 },
                             )
                             if bias_agent_url and result.tweets:
+                                connections = []
+                                for handle in result.following:
+                                    connections.append({"target": handle.lower().lstrip("@"), "type": "follows"})
+                                for handle in result.followers:
+                                    connections.append({"target": handle.lower().lstrip("@"), "type": "follower"})
                                 asyncio.create_task(
-                                    _trigger_bias_agent(username, result.tweets, bias_agent_url)
+                                    _trigger_bias_agent(username, result.tweets, bias_agent_url, connections)
                                 )
                         else:
                             await self._emit(
