@@ -1,8 +1,8 @@
 # TwitterOSINT — Production-Grade System Architecture
 
-**Version:** 1.0
-**Date:** 2026-06-03
-**Status:** Design Phase — Pre-Implementation
+**Version:** 2.0
+**Date:** 2026-06-08
+**Status:** Implemented — all phases complete
 **License:** MIT
 
 ---
@@ -870,13 +870,12 @@ networkx limitations vs Neo4j:
 
 ```
 api/routers/
-├── jobs.py          # /jobs CRUD + control
+├── jobs.py          # /jobs CRUD + control + analyze-now + sync-bias-connections
 ├── accounts.py      # /accounts queries
-├── graph.py         # /graph subgraph + traversal endpoints
-├── scrape.py        # /scrape one-shot (non-job) scrape operations
-├── export.py        # /export JSON/CSV dumps
-├── config.py        # /config read/write
-└── health.py        # /health liveness + readiness
+├── graph.py         # /graph subgraph + traversal + hashtags + intersection
+├── enrich.py        # /enrich username enumeration, identity resolution, pivots, bias flags
+├── geo.py           # /geo location geocoding + map data
+└── health.py        # /health liveness + readiness (via api/main.py)
 ```
 
 ### 5.2 Endpoint Catalogue
@@ -886,23 +885,27 @@ api/routers/
 ```
 POST   /api/v1/jobs
   Request:  CreateJobRequest
-  Response: JobResponse
-  Async: creates job, enqueues, returns immediately
+  Response: JobResponse (202)
+  Async: creates job row, spawns background thread, returns real job id immediately
 
 GET    /api/v1/jobs
-  Query params: status, limit, offset
-  Response: list[JobResponse]
+  Query params: limit, offset
+  Response: JobListResponse
 
 GET    /api/v1/jobs/{job_id}
-  Response: JobDetailResponse (includes queue stats)
+  Response: JobResponse
 
-POST   /api/v1/jobs/{job_id}/pause
-POST   /api/v1/jobs/{job_id}/resume
-POST   /api/v1/jobs/{job_id}/cancel
+POST   /api/v1/jobs/{job_id}/cancel   (202) — cooperative cancel (sets CANCELLED; worker stops at next BFS boundary)
+DELETE /api/v1/jobs/{job_id}          (204) — delete terminal job + events + queue items
 
-GET    /api/v1/jobs/{job_id}/events   (SSE endpoint)
-  Content-Type: text/event-stream
-  Emits: JobProgressEvent on each account completion
+GET    /api/v1/jobs/{job_id}/events
+  Query: since (sequence number)
+  Response: JobEventsResponse {events, last_sequence}
+  Poll-based: call with ?since=<last_sequence> to get only new events
+
+POST   /api/v1/jobs/discover          (202) — batch-scrape uncrawled stub accounts in a seed's subgraph
+POST   /api/v1/jobs/analyze-now       (202) — single-account on-demand scrape + bias classification trigger
+POST   /api/v1/jobs/sync-bias-connections (202) — backfill all stored relationships to bias agent
 ```
 
 **`CreateJobRequest` (Pydantic):**
@@ -947,32 +950,52 @@ GET    /api/v1/accounts/search
 #### Graph
 
 ```
-GET    /api/v1/graph/subgraph
-  Query: root_username, platform, depth, rel_types (comma-separated), limit
+GET    /api/v1/graph/{handle}/subgraph
+  Query: platform, depth, limit
   Response: GraphData {nodes: [], edges: []}
 
-POST   /api/v1/graph/shortest_path
-  Request: {source: str, target: str, platform: str}
-  Response: {path: list[AccountResponse], length: int}
+GET    /api/v1/graph/{handle}/neighbors
+  Query: platform, depth, rel_types
+  Response: NeighborsResponse
 
-GET    /api/v1/graph/communities
-  Response: list[{community_id: int, members: list[str], size: int}]
+GET    /api/v1/graph/hashtags
+  Query: limit, min_shared
+  Response: HashtagAnalysisResponse — ranked hashtags + account pairs
 
-GET    /api/v1/graph/stats
-  Response: {node_count: int, edge_count: int, density: float, components: int}
+GET    /api/v1/graph/intersection
+  Query: seeds[] (multiple), depth, limit, platform
+  Response: IntersectionResponse — Jaccard scores + common nodes + subgraph
 ```
 
-#### Export
+#### Enrichment
 
 ```
-GET    /api/v1/export/accounts.csv
-GET    /api/v1/export/accounts.json
-GET    /api/v1/export/relationships.csv
-GET    /api/v1/export/graph.graphml    (networkx export format)
-GET    /api/v1/export/graph.json       (Cytoscape.js compatible format)
+GET    /api/v1/enrich/username?username=<handle>
+  Response: UsernameEnumResponse — per-platform found/not_found/unknown across ~28 sites
+
+GET    /api/v1/enrich/identity?username=<handle>
+  Response: IdentityResponse — linked accounts from GitHub, GitLab, Keybase
+
+GET    /api/v1/enrich/pivots/{platform}/{handle}
+  Response: PivotsResponse — reverse-image links, breach hints
+
+GET    /api/v1/enrich/bias/status
+  Response: BiasStatus — whether xint-bias-agent is reachable
+
+GET    /api/v1/enrich/bias
+  Response: list[BiasAccountRow] — all classified accounts
+
+GET    /api/v1/enrich/bias/{username}
+  Response: BiasAccountRow — flags, confidence, evidence for one account
 ```
 
-All export endpoints support query filters identical to `/accounts`.
+#### Geo
+
+```
+GET    /api/v1/geo/locations
+  Query: max_new, limit, seed, depth
+  Response: GeoLocationsResponse — geocoded account locations for Leaflet map
+```
 
 #### Health
 
@@ -1104,27 +1127,34 @@ D3.js is the right choice when you need bespoke, pixel-perfect custom visualizat
 
 ```
 App
-├── Layout
-│   ├── Sidebar
-│   │   ├── JobPanel
-│   │   │   ├── NewJobForm
-│   │   │   └── JobList (with status badges)
-│   │   ├── FilterPanel
-│   │   │   ├── RelationshipTypeFilter (checkboxes)
-│   │   │   ├── DepthSlider
-│   │   │   └── PlatformFilter
-│   │   └── ExportPanel
-│   └── MainCanvas
-│       ├── GraphCanvas (Cytoscape.js mount point)
-│       ├── NodeTooltip (portal, absolute positioned)
-│       ├── EdgeTooltip
-│       └── GraphControls (zoom in/out/fit, layout selector)
-├── AccountDetailDrawer (slides in on node click)
-│   ├── AccountHeader (avatar, handle, platform badge)
-│   ├── RelationshipList (connections, filterable)
-│   ├── CrossPlatformLinks
-│   └── ExpandButton (triggers new scrape job for this node)
-└── StatusBar (job progress, proxy health, node/edge counts)
+├── NavBar (bias-agent status dot, page links)
+└── Routes
+    ├── / → GraphExplorer
+    │   ├── GraphCanvas (Cytoscape.js, cola physics, zoom-aware labels)
+    │   ├── NodeInspector (bio, follower count, edges, username-enum, focus button)
+    │   ├── EdgeInspector
+    │   ├── RelTypeFilter
+    │   └── Legend
+    ├── /jobs → JobsPage
+    │   ├── NewCrawlForm
+    │   └── JobList (status badges, delete button per row)
+    ├── /jobs/:jobId → JobDetail
+    │   ├── Live terminal-style event log (per-account stream)
+    │   ├── Progress bar (live accounts_scraped counter)
+    │   └── Stop / Delete buttons
+    ├── /accounts → AccountsPage (searchable table)
+    ├── /hashtags → HashtagsPage (co-occurrence table)
+    ├── /intersection → IntersectionPage (seed inputs + Jaccard graph)
+    ├── /geo → GeoMapPage (Leaflet map, Nominatim geocoding)
+    ├── /bias → BiasPage
+    │   ├── Agent status bar (online/offline dot)
+    │   ├── Analyze Now form (single-account on-demand)
+    │   └── Flags table (confidence bar, evidence, flag chips)
+    └── /dossier/:platform/:handle → DossierPage
+        ├── Profile card (bio, counts, location, join date)
+        ├── Relationships section
+        ├── Cross-platform links
+        └── Bias flags card
 ```
 
 ### 7.3 State Management

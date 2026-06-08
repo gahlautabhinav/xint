@@ -8,11 +8,18 @@
 
 ## Features
 
-- **Network crawl** — follows, followers, mentions, replies, quote tweets, **reposts (retweets)** up to configurable depth
+- **Network crawl** — follows, followers, mentions, replies, quote tweets, retweets up to configurable depth
 - **Cross-platform detection** — detects Instagram, GitHub, LinkedIn, TikTok, YouTube, Telegram, Discord handles from bios and pinned tweets
 - **Contact + enrichment** — publicly-posted emails/phones, location, join date, profile image, tweet geo-tags (t.co links expanded first)
 - **Posting-timezone inference** — buckets tweet timestamps to estimate an account's likely UTC offset (heuristic OSINT signal)
-- **Hashtag co-occurrence** — ranks hashtags and surfaces account pairs sharing them (`xint graph hashtags`, `GET /graph/hashtags`)
+- **Hashtag co-occurrence** — ranks hashtags and surfaces account pairs sharing them (`GET /graph/hashtags`)
+- **Username enumeration** — Sherlock-style check across ~28 platforms; surfaces where a handle exists (`GET /enrich/username`)
+- **Identity resolution** — cross-references GitHub, GitLab, Keybase public APIs to find linked accounts (`GET /enrich/identity`)
+- **OSINT pivots** — reverse-image search links, breach-check hints, dossier aggregation (`GET /enrich/pivots`)
+- **Geo map** — geocodes account location fields via Nominatim, plots on an interactive Leaflet map (`GET /geo/locations`)
+- **Network intersection** — Jaccard similarity + common-nodes graph for two or more seed accounts (`GET /graph/intersection`)
+- **Bias agent integration** — optional [xint-bias-agent](https://github.com/gahlautabhinav/xint-bias-agent) sidecar; crawls auto-send timelines for classification; on-demand analysis via UI
+- **Dossier page** — single-account deep-dive: profile, relationships, cross-platform links, bias flags
 - **Live progress** — real-time terminal-style activity log while crawling, per-account events streamed to the UI
 - **Interactive graph UI** — React + Cytoscape.js visualization, drag-reactive physics, click-to-expand nodes, local focus mode, zoom-aware labels
 - **REST API + CLI** — FastAPI backend, Click CLI (`xint`)
@@ -54,8 +61,8 @@ py -3.10 -m venv .venv
 source .venv/bin/activate
 
 # 3. Install
-pip install -e ".[dev]"
-python -m playwright install chromium
+py -3.10 -m pip install -e ".[dev]"
+py -3.10 -m playwright install chromium
 
 # 4. Verify
 pytest
@@ -159,9 +166,15 @@ npm run dev
 
 | Page | URL | What it does |
 |------|-----|--------------|
+| Graph Explorer | `/` | Interactive network graph — search seed, drag nodes, zoom, focus |
 | Jobs | `/jobs` | List all crawls, start a new one, delete finished jobs |
 | Job Detail | `/jobs/<id>` | Live terminal log, progress bar, Stop button for running jobs |
-| Graph Explorer | `/graph` | Interactive network graph — search seed, drag nodes, zoom, focus |
+| Accounts | `/accounts` | Searchable table of all scraped accounts |
+| Hashtags | `/hashtags` | Ranked hashtag co-occurrence table |
+| Network Intersection | `/intersection` | Jaccard similarity graph for two or more seeds |
+| Geo Map | `/geo` | Leaflet map of account location fields |
+| Bias Analysis | `/bias` | Bias-agent flag table + on-demand analyze form |
+| Dossier | `/dossier/<platform>/<handle>` | Deep-dive profile: bio, relationships, cross-platform links, bias flags |
 
 #### Graph Explorer tips
 
@@ -171,6 +184,41 @@ npm run dev
 - **Zoom out** — minor nodes' labels fade; hub/root/selected labels stay visible
 - **Focus mode** (target icon) — dims everything beyond the selected node's N-hop neighbourhood (1–3 hops, configurable)
 - **Filter** edges by type (FOLLOWS, MENTIONS, REPLIES_TO, CROSS_PLATFORM_LINK) via the toolbar
+
+---
+
+## Bias Agent (optional)
+
+xint integrates with [xint-bias-agent](https://github.com/gahlautabhinav/xint-bias-agent), a separate sidecar that classifies Twitter timelines for bias signals using Gemini.
+
+### Setup
+
+1. Clone and configure xint-bias-agent:
+   ```bash
+   git clone https://github.com/gahlautabhinav/xint-bias-agent
+   cd xint-bias-agent
+   echo "GEMINI_API_KEY=your_key_here" > .env
+   py -3.10 -m src.server   # starts on port 5000
+   ```
+
+2. Add to xint's `.env`:
+   ```
+   BIAS_AGENT_URL=http://127.0.0.1:5000
+   ```
+
+3. Restart xint backend. Every crawl will now auto-send timelines to the agent.
+
+### On-demand analysis
+
+From the **Bias** page, enter a `@username` and click **Analyze Now** — xint scrapes the account on-demand and triggers immediate classification.
+
+### Backfill existing data
+
+Push all stored relationships to the bias agent in one shot:
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/v1/jobs/sync-bias-connections
+```
 
 ---
 
@@ -201,6 +249,7 @@ All settings via `.env` (or environment variables). Copy `.env.example` to `.env
 | `DEFAULT_DEPTH` | `2` | Crawl depth (1–4) |
 | `BROWSER_POOL_SIZE` | `3` | Concurrent browser contexts |
 | `API_KEY` | _(none)_ | Set to require `X-API-Key` header on all API requests |
+| `BIAS_AGENT_URL` | _(none)_ | URL of xint-bias-agent sidecar (e.g. `http://127.0.0.1:5000`); enables bias classification |
 
 > **Upgrading from an older version?** If you had data in `data/osint.db`, rename it to `data/xint.db` (or set `DATABASE_URL=sqlite+aiosqlite:///./data/osint.db` in `.env`).
 
@@ -209,10 +258,10 @@ All settings via `.env` (or environment variables). Copy `.env.example` to `.env
 ## Running Tests
 
 ```bash
-pytest                          # all tests (275 currently)
-pytest tests/test_api.py        # API layer only
-pytest tests/test_crawler.py    # crawler + jobs
-pytest -m live                  # live browser tests (needs auth + network)
+py -3.10 -m pytest                          # all tests (397 currently)
+py -3.10 -m pytest tests/test_api.py        # API layer only
+py -3.10 -m pytest tests/test_crawler.py    # crawler + jobs
+py -3.10 -m pytest -m live                  # live browser tests (needs auth + network)
 ```
 
 ---

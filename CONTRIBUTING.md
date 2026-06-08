@@ -4,93 +4,92 @@ Thanks for your interest. xint is MIT-licensed and welcomes contributions.
 
 ---
 
-## Getting Started
+## Setup
+
+**Requirements:** Python 3.10, Node.js 18+
 
 ```bash
 git clone https://github.com/gahlautabhinav/xint.git
 cd xint
+
 py -3.10 -m venv .venv
 .venv\Scripts\Activate.ps1          # Windows
 # source .venv/bin/activate         # macOS/Linux
-pip install -e ".[dev]"
-python -m playwright install chromium
-pytest                               # should be all green before you start
+
+py -3.10 -m pip install -e ".[dev]"
+py -3.10 -m playwright install chromium
+```
+
+Frontend:
+
+```bash
+cd frontend
+npm install
+npm run dev   # dev server on :5173, proxies /api → :8000
 ```
 
 ---
 
-## Module boundaries
+## Running tests
 
-| Module | Owns | Must NOT |
-|--------|------|---------|
-| `scraper/` | Browser automation, anti-detect, proxy rotation | Import from `api/` or `cli/` |
-| `graph/` | Graph backends, traversal, similarity scoring | Import from `scraper/` |
-| `storage/` | SQLAlchemy models, repos, Alembic migrations | Import from `graph/` or `scraper/` |
-| `api/` | FastAPI routers, schemas, lifespan | Import from `cli/` |
-| `cli/` | Click commands, Rich formatting | Import from `api/` (calls modules directly) |
-| `frontend/` | React + Vite, calls REST API only | Import Python modules |
+```bash
+py -3.10 -m pytest                  # full suite (~397 tests, offline)
+py -3.10 -m pytest -m live          # live browser tests (needs auth + network)
+py -3.10 -m ruff check .            # linter
+py -3.10 -m mypy .                  # type checker
+```
 
-Breaking these boundaries requires discussion first — open an issue.
+All three gates must be green before submitting a PR.
 
 ---
 
-## Conventions
+## Python conventions
 
-### Python
-
-- **Version:** Python 3.10 only. Use `py -3.10` on Windows; `python3.10` elsewhere.
-- **Formatter / linter:** `ruff` (configured in `pyproject.toml`). Run `ruff check .` before committing.
-- **Types:** `mypy` with `ignore_missing_imports = true`. Run `mypy <changed files>` before committing.
-- **Tests:** `pytest` with `asyncio_mode = "auto"`. Every new feature needs tests. No mocking the database — integration tests hit real SQLite (in-memory for tests).
-- **Comments:** Only when the *why* is non-obvious. No docstrings on trivial methods.
-
-### Frontend
-
-- TypeScript strict mode. No `any` unless unavoidable.
-- Cytoscape operations go through `GraphCanvas.tsx` — never reach into `cy` from parent components.
-- CSS: scoped per-feature (`.feature/feature.css`), no global overrides.
-- Run `npm run build` before submitting — build errors block CI.
-
-### Git
-
-- Branch from `main`. Name: `feature/short-description` or `fix/short-description`.
-- Commit messages: imperative mood, 72-char subject line, reference an issue if one exists.
-- One logical change per commit. Squash WIP commits before opening a PR.
+- **Always `py -3.10`** — never bare `python`, `python3`, or `pip`. The repo is pinned to 3.10.
+- Async SQLAlchemy throughout — no sync sessions anywhere.
+- Repository pattern only — no raw SQL in route handlers or business logic (except explicit backfill queries).
+- New endpoints: add Pydantic schema in `api/schemas/`, route in the appropriate router, tests in `tests/test_api.py`.
 
 ---
 
-## Submitting a PR
+## Frontend conventions
 
-1. Fork → branch → change → test → push
-2. Open PR against `main`
-3. Fill the PR template (summary + test plan)
-4. All CI checks must pass: `pytest`, `ruff check .`, `mypy`, `npm run build`
-5. A maintainer will review — expect feedback within a few days
-
-### PR checklist
-
-- [ ] `pytest` passes (275+ tests, none skipped without reason)
-- [ ] `ruff check .` clean
-- [ ] `mypy` clean on changed files
-- [ ] `npm run build` clean (if frontend changed)
-- [ ] No new secrets or credentials committed
-- [ ] `config/sessions/` and `data/*.db` are gitignored — don't commit them
+- TypeScript throughout. No `any` without a comment explaining why.
+- Styles in a co-located `.css` file (e.g. `features/bias/bias.css`), using CSS variables from the design system (`--c-*`, `--s-*`, `--r-*`).
+- TanStack Query for all server state. No direct `fetch` calls — use `api.*` from `src/lib/api.ts`.
+- `refetchInterval` minimum 3000ms on polling queries (prevents Windows socket exhaustion under heavy crawls).
 
 ---
 
-## Reporting bugs
+## Selectors
 
-Use [GitHub Issues](https://github.com/gahlautabhinav/xint/issues). Include:
+Twitter/X DOM changes frequently. Selectors live in `scraper/extractors/twitter.py` under `SELECTOR_REGISTRY["v1"]`. When X breaks something:
 
-- OS and Python version
-- Full error output / traceback
-- Steps to reproduce (minimal)
-- What you expected vs what happened
-
-For security issues — see [SECURITY.md](SECURITY.md) instead.
+1. Open a GitHub issue with the broken selector and the new one.
+2. Update `SELECTOR_REGISTRY` and bump the version key.
+3. Update `tests/fixtures/snapshots/` if the snapshot is stale.
+4. Run `py -3.10 scripts/validate_selectors.py` manually against live X before merging.
 
 ---
 
-## Code of Conduct
+## Branch and PR workflow
 
-This project follows the [Contributor Covenant](CODE_OF_CONDUCT.md). Be respectful.
+1. Branch from `main`: `git checkout -b feat/short-description`
+2. Keep PRs focused — one feature or fix per PR.
+3. Commit messages: imperative mood, present tense (`add geo map page`, not `added geo map page`).
+4. All CI checks green (`pytest` + `ruff` + `mypy` + `npm run build`).
+5. For frontend changes: smoke-test the golden path in a browser before submitting.
+
+---
+
+## What not to contribute
+
+- New external API dependencies without discussion in an issue first.
+- Hardcoded credentials, API keys, or email addresses — these must go in `.env` (gitignored).
+- Scraping techniques designed to be used against accounts without authorization — see [DISCLAIMER.md](DISCLAIMER.md).
+
+---
+
+## Security issues
+
+Report vulnerabilities privately via [SECURITY.md](SECURITY.md). Do not open a public issue.
