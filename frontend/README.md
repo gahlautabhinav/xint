@@ -9,14 +9,18 @@ labels (Geist Mono). See `../scripts/DESIGN-x.ai.md`.
 
 ## Routes
 
-| Path             | View                                                        |
-| ---------------- | ----------------------------------------------------------- |
-| `/`              | **Graph Explorer** — search a seed handle, render its       |
-|                  | relationship graph, click/​double-click nodes to expand,    |
-|                  | filter by relationship type, inspect any account.           |
-| `/jobs`          | **Jobs** — start a crawl and watch live progress.           |
-| `/jobs/:id`      | Job detail with a live-streaming event log.                 |
-| `/accounts`      | **Accounts** — searchable table of every scraped profile.   |
+| Path                        | View                                                                          |
+| --------------------------- | ----------------------------------------------------------------------------- |
+| `/`                         | **Graph Explorer** — search a seed handle, render relationship graph, drag-   |
+|                             | reactive cola physics, zoom-aware labels, local focus mode.                   |
+| `/jobs`                     | **Jobs** — start a crawl, list all jobs, delete finished ones.                |
+| `/jobs/:id`                 | Job detail — live terminal-style event log, progress bar, Stop/Delete buttons.|
+| `/accounts`                 | **Accounts** — searchable table of every scraped profile.                     |
+| `/hashtags`                 | **Hashtags** — ranked hashtag co-occurrence table.                            |
+| `/intersection`             | **Network Intersection** — Jaccard similarity graph for two or more seeds.    |
+| `/geo`                      | **Geo Map** — Leaflet map of account location fields (Nominatim geocoding).   |
+| `/bias`                     | **Bias Analysis** — bias-agent flag table + on-demand Analyze Now form.       |
+| `/dossier/:platform/:handle`| **Dossier** — deep-dive profile: bio, relationships, cross-platform, bias.    |
 
 ## Develop
 
@@ -52,7 +56,8 @@ npm run preview      # serve the production build locally
 ## Data flow
 
 The explorer reads `GET /graph/{handle}/subgraph` for the initial network and
-`GET /graph/{handle}/subgraph?depth=1` per node when expanding, merging results
-into a live Cytoscape instance. Node detail is enriched from
-`GET /accounts/{platform}/{handle}`. Jobs use `POST /jobs`, `GET /jobs`,
-`GET /jobs/{id}` and the poll-based `GET /jobs/{id}/events`.
+merges incremental results into a live Cytoscape instance via `cy.add()`.
+Node detail comes from `GET /accounts/{platform}/{handle}`. Username enumeration
+is triggered via `GET /enrich/username`. Jobs use `POST /jobs`, `GET /jobs`,
+`GET /jobs/{id}`, and the poll-based `GET /jobs/{id}/events`. Bias classification
+calls `POST /jobs/analyze-now` and reads `GET /enrich/bias`.

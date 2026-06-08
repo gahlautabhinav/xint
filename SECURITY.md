@@ -8,7 +8,7 @@ Only the latest commit on `main` is actively maintained.
 
 **Do not open a public GitHub issue for security vulnerabilities.**
 
-Email: **abhi.gahlaut69@gmail.com**
+Open a [private security advisory](https://github.com/gahlautabhinav/xint/security/advisories/new) on GitHub.
 
 Include:
 - Description of the vulnerability
