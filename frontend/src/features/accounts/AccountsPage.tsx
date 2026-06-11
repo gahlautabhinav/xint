@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
-import { AtSign, BadgeCheck, ExternalLink, Fingerprint, MapPin, Network, Phone, Search, X } from "lucide-react";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { Link, useNavigate } from "react-router-dom";
+import { AtSign, BadgeCheck, ExternalLink, Fingerprint, MapPin, Network, Phone, RefreshCw, Search, X } from "lucide-react";
 import { api } from "@/lib/api";
 import type { Account } from "@/lib/types";
 import { formatFull, formatDate } from "@/lib/format";
@@ -135,6 +135,14 @@ export function AccountsPage() {
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Account | null>(null);
   const debounced = useDebouncedValue(search.trim(), 300);
+  const navigate = useNavigate();
+
+  const rescrape = useMutation({
+    mutationFn: () => api.rescrapeAll(),
+    onSuccess: (data) => {
+      if (data.job_id) navigate(`/jobs/${data.job_id}`);
+    },
+  });
 
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["accounts", debounced],
@@ -156,6 +164,16 @@ export function AccountsPage() {
             </span>
           ) : null}
         </p>
+        <button
+          className="pill pill--sm"
+          onClick={() => rescrape.mutate()}
+          disabled={rescrape.isPending}
+          type="button"
+          title="Re-scrape all previously scraped accounts to refresh data and replies"
+        >
+          <RefreshCw size={14} className={rescrape.isPending ? "spin" : ""} />
+          {rescrape.isPending ? "Queuing…" : "Rescrape All"}
+        </button>
       </header>
 
       <div className="searchbar accounts__search reveal reveal-2">

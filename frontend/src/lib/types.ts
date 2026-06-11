@@ -275,6 +275,12 @@ export interface BiasStatus {
   url: string | null;
 }
 
+export interface RescrapeResponse {
+  job_id: string | null;
+  queued: number;
+  status: string;
+}
+
 // ── Hashtags ───────────────────────────────────────────────────────────
 export interface HashtagCount {
   tag: string;

@@ -83,3 +83,23 @@ class AnalyzeNowResponse(BaseModel):
     job_id: uuid.UUID
     username: str
     status: str
+
+
+class RescrapeRequest(BaseModel):
+    """Re-scrape already-scraped accounts to refresh their data.
+
+    Leave *usernames* empty to re-scrape every account that has been
+    scraped at least once (``raw_data IS NOT NULL``). Pass a list to
+    target specific handles.
+    """
+
+    usernames: list[str] = Field(default_factory=list)
+    rate_profile: str = Field(default="moderate")
+    proxy_urls: list[str] = Field(default_factory=list)
+    platform: Literal["twitter"] = "twitter"
+
+
+class RescrapeResponse(BaseModel):
+    job_id: uuid.UUID | None
+    queued: int
+    status: str

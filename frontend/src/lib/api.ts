@@ -23,6 +23,7 @@ import type {
   NeighborsResponse,
   PivotsResponse,
   RelType,
+  RescrapeResponse,
   SubgraphResponse,
   UsernameEnumResponse,
 } from "./types";
@@ -259,6 +260,13 @@ export const api = {
     return request<AnalyzeNowResponse>(`/jobs/analyze-now`, {
       method: "POST",
       body: { username },
+    });
+  },
+
+  rescrapeAll(body?: { usernames?: string[]; rate_profile?: string }): Promise<RescrapeResponse> {
+    return request<RescrapeResponse>(`/jobs/rescrape`, {
+      method: "POST",
+      body: body ?? {},
     });
   },
 

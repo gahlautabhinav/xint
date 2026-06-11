@@ -886,3 +886,73 @@ class TestApiKey:
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
             r = await c.get("/jobs", headers={"X-API-Key": "secret"})
             assert r.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# POST /jobs/rescrape
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+async def scraped_account(session_factory) -> Account:
+    async with session_factory() as session:
+        repo = AccountRepository(session)
+        acc = await repo.upsert(
+            username="alice",
+            platform="twitter",
+            raw_data={"tweets": []},
+        )
+        await session.commit()
+        return acc
+
+
+class TestRescrape:
+    async def test_nothing_to_rescrape_when_empty(self, client: AsyncClient):
+        with patch("api.routers.jobs.threading.Thread") as MockThread:
+            r = await client.post("/jobs/rescrape", json={})
+        assert r.status_code == 202
+        data = r.json()
+        assert data["status"] == "nothing_to_rescrape"
+        assert data["queued"] == 0
+        assert data["job_id"] is None
+        MockThread.assert_not_called()
+
+    async def test_queues_all_scraped_accounts(
+        self, client: AsyncClient, scraped_account: Account, session_factory
+    ):
+        with patch("api.routers.jobs.threading.Thread") as MockThread:
+            r = await client.post("/jobs/rescrape", json={})
+        assert r.status_code == 202
+        data = r.json()
+        assert data["status"] == "queued"
+        assert data["queued"] == 1
+        assert data["job_id"] is not None
+        MockThread.assert_called_once()
+        MockThread.return_value.start.assert_called_once()
+
+        async with session_factory() as session:
+            job = await JobRepository(session).get_job(uuid.UUID(data["job_id"]))
+        assert job is not None
+        assert job.max_accounts == 1
+
+    async def test_specific_usernames(self, client: AsyncClient):
+        with patch("api.routers.jobs.threading.Thread") as MockThread:
+            r = await client.post(
+                "/jobs/rescrape", json={"usernames": ["alice", "@bob"]}
+            )
+        assert r.status_code == 202
+        data = r.json()
+        assert data["status"] == "queued"
+        assert data["queued"] == 2
+        assert data["job_id"] is not None
+        MockThread.assert_called_once()
+
+    async def test_skips_unscraped_stubs(self, client: AsyncClient, session_factory):
+        async with session_factory() as session:
+            await AccountRepository(session).upsert(username="stub", platform="twitter")
+            await session.commit()
+        with patch("api.routers.jobs.threading.Thread") as MockThread:
+            r = await client.post("/jobs/rescrape", json={})
+        assert r.status_code == 202
+        assert r.json()["status"] == "nothing_to_rescrape"
+        MockThread.assert_not_called()

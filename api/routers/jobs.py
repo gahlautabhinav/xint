@@ -18,6 +18,8 @@ from api.schemas.jobs import (
     JobEventsResponse,
     JobListResponse,
     JobResponse,
+    RescrapeRequest,
+    RescrapeResponse,
 )
 from config.settings import get_settings
 from graph.schema.nodes import make_node_id, parse_node_id
@@ -275,6 +277,64 @@ async def sync_bias_connections(
 
     threading.Thread(target=_push, name="bias-conn-sync", daemon=True).start()
     return {"status": "syncing", "edges": len(payload)}
+
+
+@router.post("/rescrape", status_code=status.HTTP_202_ACCEPTED, response_model=RescrapeResponse)
+async def rescrape(
+    body: RescrapeRequest,
+    _key: ApiKeyCheck,
+    session: DbSession,
+    graph: GraphBackend,
+) -> RescrapeResponse:
+    """Re-scrape already-scraped accounts to refresh their data.
+
+    Pass ``usernames`` to target specific handles, or leave empty to queue
+    every account that has been scraped at least once. Runs as a single
+    background job with no BFS expansion — profile + tweets only.
+    """
+    if body.usernames:
+        handles = [u.lstrip("@").lower() for u in body.usernames]
+    else:
+        stmt = select(Account.username).where(
+            Account.platform == body.platform,
+            Account.raw_data.isnot(None),
+        )
+        handles = [r.lower() for r in (await session.execute(stmt)).scalars().all()]
+
+    if not handles:
+        return RescrapeResponse(job_id=None, queued=0, status="nothing_to_rescrape")
+
+    config = CrawlerConfig(
+        seed_username=f"rescrape-{len(handles)}",
+        max_depth=1,
+        max_accounts=len(handles),
+        rate_profile_name=body.rate_profile,  # type: ignore[arg-type]
+        proxy_urls=body.proxy_urls,
+        scrape_following=False,
+        scrape_followers=False,
+        target_usernames=handles,
+        expand=False,
+    )
+
+    job_repo = JobRepository(session)
+    job = await job_repo.create_job(
+        seed_username=f"rescrape-{len(handles)}",
+        max_depth=1,
+        max_accounts=len(handles),
+        status=JobStatus.PENDING,
+    )
+    await session.refresh(job)
+    job_id = job.id
+    await session.commit()
+
+    threading.Thread(
+        target=run_crawl_in_thread,
+        args=(config, graph, job_id),
+        name=f"rescrape-{len(handles)}",
+        daemon=True,
+    ).start()
+
+    return RescrapeResponse(job_id=job_id, queued=len(handles), status="queued")
 
 
 @router.get("", response_model=JobListResponse)
