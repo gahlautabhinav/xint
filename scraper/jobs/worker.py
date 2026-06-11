@@ -105,7 +105,9 @@ async def scrape_account(
     *max_following* / *max_followers* handles (the network edges — most
     accounts don't @mention the people they follow).
     """
-    url = f"{_TWITTER_BASE_URL}/{username}"
+    # /with_replies includes both original tweets and replies in one scroll,
+    # giving the bias agent full context instead of tweets-only.
+    url = f"{_TWITTER_BASE_URL}/{username}/with_replies"
 
     await bucket.acquire()
     try:
