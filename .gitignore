@@ -1,3 +1,5 @@
+CLAUDE.md
+
 # Secrets / credentials — NEVER commit
 .env
 config/proxies.txt
