@@ -24,6 +24,7 @@ from storage.models.relationship import RelType
 from storage.repositories.account_repo import AccountRepository
 from storage.repositories.job_repo import JobRepository
 from storage.repositories.relationship_repo import RelationshipRepository
+from storage.repositories.tweet_repo import TweetRepository
 
 __all__ = ["AccountCrawler", "CrawlerConfig", "CrawlJob", "JobStatus"]
 
@@ -480,6 +481,9 @@ class AccountCrawler:
                     "timezone": result.activity or {},
                 },
             )
+
+            tweet_repo = TweetRepository(session)
+            await tweet_repo.bulk_upsert(account.id, result.tweets)
 
             for handle, rel_type in deduped_edges:
                 tweet_ids = edge_evidence.get((handle, rel_type), [])

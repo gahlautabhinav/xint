@@ -25,6 +25,7 @@ import type {
   RelType,
   RescrapeResponse,
   SubgraphResponse,
+  TweetListResponse,
   UsernameEnumResponse,
 } from "./types";
 
@@ -190,6 +191,17 @@ export const api = {
   getAccount(platform: string, handle: string): Promise<Account> {
     return request<Account>(
       `/accounts/${encodeURIComponent(platform)}/${encodeURIComponent(handle)}`,
+    );
+  },
+
+  getTweets(
+    platform: string,
+    handle: string,
+    opts: { limit?: number; offset?: number; signal?: AbortSignal } = {},
+  ): Promise<TweetListResponse> {
+    return request<TweetListResponse>(
+      `/accounts/${encodeURIComponent(platform)}/${encodeURIComponent(handle)}/tweets`,
+      { params: { limit: opts.limit, offset: opts.offset }, signal: opts.signal },
     );
   },
 

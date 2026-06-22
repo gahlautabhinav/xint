@@ -366,6 +366,66 @@ class TestGetAccount:
 
 
 # ---------------------------------------------------------------------------
+# GET /accounts/{platform}/{handle}/tweets
+# ---------------------------------------------------------------------------
+
+
+class TestGetAccountTweets:
+    async def test_empty(self, client: AsyncClient, seed_account: Account):
+        r = await client.get("/accounts/twitter/alice/tweets")
+        assert r.status_code == 200
+        data = r.json()
+        assert data["items"] == []
+        assert data["total"] == 0
+
+    async def test_returns_tweets(
+        self, client: AsyncClient, seed_account: Account, session_factory
+    ):
+        from scraper.extractors.twitter import TweetData
+        from storage.repositories.tweet_repo import TweetRepository
+
+        async with session_factory() as session:
+            repo = TweetRepository(session)
+            await repo.bulk_upsert(seed_account.id, [
+                TweetData(tweet_id="111", text="first tweet", timestamp="2024-01-01T12:00:00Z"),
+                TweetData(tweet_id="222", text="second tweet", timestamp="2024-01-02T12:00:00Z"),
+            ])
+            await session.commit()
+
+        r = await client.get("/accounts/twitter/alice/tweets")
+        assert r.status_code == 200
+        data = r.json()
+        assert data["total"] == 2
+        texts = {item["text"] for item in data["items"]}
+        assert texts == {"first tweet", "second tweet"}
+        assert data["items"][0]["tweet_url"].startswith("https://x.com/alice/status/")
+
+    async def test_not_found(self, client: AsyncClient):
+        r = await client.get("/accounts/twitter/nobody/tweets")
+        assert r.status_code == 404
+
+    async def test_pagination(
+        self, client: AsyncClient, seed_account: Account, session_factory
+    ):
+        from scraper.extractors.twitter import TweetData
+        from storage.repositories.tweet_repo import TweetRepository
+
+        async with session_factory() as session:
+            repo = TweetRepository(session)
+            await repo.bulk_upsert(seed_account.id, [
+                TweetData(tweet_id=str(i), text=f"tweet {i}", timestamp=None)
+                for i in range(10)
+            ])
+            await session.commit()
+
+        r = await client.get("/accounts/twitter/alice/tweets?limit=3&offset=0")
+        assert r.status_code == 200
+        data = r.json()
+        assert len(data["items"]) == 3
+        assert data["total"] == 10
+
+
+# ---------------------------------------------------------------------------
 # GET /graph/{handle}/subgraph
 # ---------------------------------------------------------------------------
 

@@ -1,5 +1,6 @@
 import { useParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import {
   ArrowLeft,
   AtSign,
@@ -17,7 +18,7 @@ import {
 } from "lucide-react";
 
 import { api } from "@/lib/api";
-import type { BiasVerdict, PivotLink } from "@/lib/types";
+import type { BiasVerdict, PivotLink, Tweet } from "@/lib/types";
 import { formatFull, formatDate } from "@/lib/format";
 import { Pill } from "@/components/Pill";
 import { ErrorState, LoadingState } from "@/components/states";
@@ -67,6 +68,55 @@ function LinkChips({ links }: { links: PivotLink[] }) {
   );
 }
 
+function tweetKind(tw: Tweet): "reply" | "retweet" | "quote" | "post" {
+  if (tw.reply_to) return "reply";
+  if (tw.retweeted_from) return "retweet";
+  if (tw.quote_url) return "quote";
+  return "post";
+}
+
+const KIND_LABEL: Record<string, string> = {
+  reply: "↩ reply",
+  retweet: "↻ retweet",
+  quote: "❝ quote",
+  post: "post",
+};
+
+function TweetCard({ tw }: { tw: Tweet }) {
+  const kind = tweetKind(tw);
+  return (
+    <div className={`dossier__tweet dossier__tweet--${kind}`}>
+      <div className="dossier__tweet-meta mono">
+        <span className={`dossier__tweet-kind dossier__tweet-kind--${kind}`}>
+          {KIND_LABEL[kind]}
+        </span>
+        {tw.timestamp && (
+          <span className="dossier__tweet-ts">
+            {new Date(tw.timestamp).toLocaleString()}
+          </span>
+        )}
+        {tw.tweet_url && (
+          <a
+            href={tw.tweet_url}
+            target="_blank"
+            rel="noreferrer"
+            className="dossier__tweet-link mono"
+            title="Open on X"
+          >
+            ↗
+          </a>
+        )}
+      </div>
+      <p className="dossier__tweet-text">{tw.text}</p>
+      {(tw.reply_to || tw.retweeted_from) && (
+        <span className="dossier__tweet-ref mono">
+          {tw.reply_to ? `→ @${tw.reply_to}` : `RT @${tw.retweeted_from}`}
+        </span>
+      )}
+    </div>
+  );
+}
+
 export function DossierPage() {
   const { platform = "twitter", handle = "" } = useParams();
 
@@ -109,6 +159,15 @@ export function DossierPage() {
     retry: false,
     staleTime: 5 * 60_000,
     enabled: biasStatusQuery.data?.connected === true,
+  });
+
+  const [tweetOffset, setTweetOffset] = useState(0);
+  const TWEET_PAGE = 25;
+  const tweetsQuery = useQuery({
+    queryKey: ["tweets", platform, handle, tweetOffset],
+    queryFn: () => api.getTweets(platform, handle, { limit: TWEET_PAGE, offset: tweetOffset }),
+    retry: false,
+    staleTime: 5 * 60_000,
   });
 
   const account = accountQuery.data;
@@ -462,6 +521,59 @@ export function DossierPage() {
             </section>
           )}
         </div>
+
+        {/* ── Posts & Replies ── */}
+        <section className="dossier__card reveal">
+          <h2 className="dossier__section-title">
+            <AtSign size={14} /> Posts &amp; Replies
+            {tweetsQuery.data && (
+              <span className="dossier__id-sub mono">
+                {tweetsQuery.data.total} scraped
+              </span>
+            )}
+          </h2>
+          {tweetsQuery.isLoading ? (
+            <span className="dossier__loading mono">
+              <Loader2 size={13} className="spin" /> loading tweets…
+            </span>
+          ) : tweetsQuery.isError ? (
+            <p className="dossier__empty mono">Could not load tweets.</p>
+          ) : (tweetsQuery.data?.items.length ?? 0) === 0 ? (
+            <p className="dossier__empty mono">
+              No tweets stored yet — rescrape this account to populate.
+            </p>
+          ) : (
+            <>
+              <div className="dossier__tweet-feed">
+                {tweetsQuery.data!.items.map((tw) => (
+                  <TweetCard key={tw.id} tw={tw} />
+                ))}
+              </div>
+              {tweetsQuery.data!.total > TWEET_PAGE && (
+                <div className="dossier__tweet-pager mono">
+                  <button
+                    className="dossier__tweet-nav"
+                    disabled={tweetOffset === 0}
+                    onClick={() => setTweetOffset((p) => Math.max(0, p - TWEET_PAGE))}
+                  >
+                    ← prev
+                  </button>
+                  <span>
+                    {tweetOffset + 1}–{Math.min(tweetOffset + TWEET_PAGE, tweetsQuery.data!.total)}
+                    {" "}/ {tweetsQuery.data!.total}
+                  </span>
+                  <button
+                    className="dossier__tweet-nav"
+                    disabled={tweetOffset + TWEET_PAGE >= tweetsQuery.data!.total}
+                    onClick={() => setTweetOffset((p) => p + TWEET_PAGE)}
+                  >
+                    next →
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+        </section>
         </>
       ) : null}
     </div>

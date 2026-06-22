@@ -13,6 +13,7 @@ from storage.models.platform import CrossPlatformLink, SourceField
 from storage.models.proxy import ProxyRecord
 from storage.models.raw_data import RawScrapeResult
 from storage.models.relationship import Relationship, RelType
+from storage.models.tweet import Tweet
 
 __all__ = [
     "Account",
@@ -28,4 +29,5 @@ __all__ = [
     "RawScrapeResult",
     "ProxyRecord",
     "GeocodeCache",
+    "Tweet",
 ]

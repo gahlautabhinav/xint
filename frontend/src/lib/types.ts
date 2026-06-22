@@ -141,6 +141,27 @@ export interface AccountListResponse {
   total: number;
 }
 
+// ── Tweets ────────────────────────────────────────────────────────────
+export interface Tweet {
+  id: string;
+  tweet_id: string | null;
+  text: string;
+  timestamp: string | null;
+  reply_to: string | null;
+  quote_url: string | null;
+  retweeted_from: string | null;
+  geo_location: string | null;
+  mentions: string[];
+  hashtags: string[];
+  scraped_at: string;
+  tweet_url: string | null;
+}
+
+export interface TweetListResponse {
+  items: Tweet[];
+  total: number;
+}
+
 // ── Intersection ──────────────────────────────────────────────────────
 export interface CommonNodeResult {
   node_id: string;
