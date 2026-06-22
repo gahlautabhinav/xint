@@ -33,7 +33,7 @@ npm run dev   # dev server on :5173, proxies /api → :8000
 ## Running tests
 
 ```bash
-py -3.10 -m pytest                  # full suite (~397 tests, offline)
+py -3.10 -m pytest                  # full suite (~410 tests, offline)
 py -3.10 -m pytest -m live          # live browser tests (needs auth + network)
 py -3.10 -m ruff check .            # linter
 py -3.10 -m mypy .                  # type checker

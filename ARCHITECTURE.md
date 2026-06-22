@@ -1,7 +1,7 @@
 # TwitterOSINT — Production-Grade System Architecture
 
-**Version:** 2.0
-**Date:** 2026-06-08
+**Version:** 2.1
+**Date:** 2026-06-22
 **Status:** Implemented — all phases complete
 **License:** MIT
 
@@ -525,11 +525,13 @@ storage/
 │   ├── relationship.py
 │   ├── job.py        # CrawlJob ORM model
 │   ├── raw_data.py   # RawScrapeResult storage
-│   └── platform.py   # CrossPlatformLink model
+│   ├── platform.py   # CrossPlatformLink model
+│   └── tweet.py      # Tweet ORM model (FK → Account, CASCADE)
 ├── repositories/
 │   ├── account_repo.py
 │   ├── job_repo.py
-│   └── relationship_repo.py
+│   ├── relationship_repo.py
+│   └── tweet_repo.py  # bulk_upsert + get_tweets (paginated)
 ├── migrations/
 │   └── versions/     # Alembic migration scripts
 ├── engine.py         # DB engine factory
@@ -674,6 +676,22 @@ RawScrapeResult
   scraped_at: datetime
   extractor_version: str  -- semver of extractor used
   selector_version: str   -- version of SELECTOR_REGISTRY used
+
+Tweet
+  id: UUID PK
+  account_id: FK -> Account.id (CASCADE)
+  tweet_id: str (nullable)  -- X status ID; NULL for tweets with no parseable ID
+  text: str NOT NULL
+  timestamp: datetime (timezone-aware, nullable)
+  reply_to: str (nullable)        -- handle being replied to
+  quote_url: str (nullable)       -- URL of quoted tweet
+  retweeted_from: str (nullable)  -- handle retweeted from
+  geo_location: str (nullable)
+  mentions: JSON array            -- handles mentioned in tweet body
+  hashtags: JSON array            -- hashtags in tweet body
+  scraped_at: datetime            -- when this row was written
+  UNIQUE(account_id, tweet_id)    -- dedup on rescrape; NULL tweet_id rows skipped
+  INDEX(account_id), INDEX(timestamp), INDEX(tweet_id)
 
 ProxyRecord
   id: UUID PK
@@ -945,6 +963,11 @@ GET    /api/v1/accounts/{account_id}/cross_platform
 
 GET    /api/v1/accounts/search
   Query: q (username prefix/bio text search), platform, limit
+
+GET    /api/v1/accounts/{platform}/{handle}/tweets
+  Query: limit (1-200, default 50), offset
+  Response: TweetListResponse {items: list[TweetResponse], total: int}
+  TweetResponse includes computed tweet_url = "https://x.com/{handle}/status/{tweet_id}"
 ```
 
 #### Graph
@@ -1154,7 +1177,8 @@ App
         ├── Profile card (bio, counts, location, join date)
         ├── Relationships section
         ├── Cross-platform links
-        └── Bias flags card
+        ├── Bias flags card
+        └── Posts & Replies — paginated tweet feed (TweetCard, color-coded by kind)
 ```
 
 ### 7.3 State Management

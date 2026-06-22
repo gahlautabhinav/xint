@@ -174,7 +174,7 @@ npm run dev
 | Network Intersection | `/intersection` | Jaccard similarity graph for two or more seeds |
 | Geo Map | `/geo` | Leaflet map of account location fields |
 | Bias Analysis | `/bias` | Bias-agent flag table + on-demand analyze form |
-| Dossier | `/dossier/<platform>/<handle>` | Deep-dive profile: bio, relationships, cross-platform links, bias flags |
+| Dossier | `/dossier/<platform>/<handle>` | Deep-dive profile: bio, relationships, cross-platform links, bias flags, posts & replies tweet feed |
 
 #### Graph Explorer tips
 
@@ -258,7 +258,7 @@ All settings via `.env` (or environment variables). Copy `.env.example` to `.env
 ## Running Tests
 
 ```bash
-py -3.10 -m pytest                          # all tests (397 currently)
+py -3.10 -m pytest                          # all tests (410 currently)
 py -3.10 -m pytest tests/test_api.py        # API layer only
 py -3.10 -m pytest tests/test_crawler.py    # crawler + jobs
 py -3.10 -m pytest -m live                  # live browser tests (needs auth + network)
