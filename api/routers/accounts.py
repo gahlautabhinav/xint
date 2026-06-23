@@ -90,6 +90,7 @@ async def get_account_tweets(
             geo_location=tw.geo_location,
             mentions=tw.mentions or [],
             hashtags=tw.hashtags or [],
+            media_urls=tw.media_urls or [],
             scraped_at=tw.scraped_at,
             tweet_url=(
                 f"https://x.com/{handle}/status/{tw.tweet_id}"

@@ -108,6 +108,15 @@ function TweetCard({ tw }: { tw: Tweet }) {
         )}
       </div>
       <p className="dossier__tweet-text">{tw.text}</p>
+      {tw.media_urls.length > 0 && (
+        <div className="dossier__tweet-media">
+          {tw.media_urls.map((url) => (
+            <a key={url} href={url} target="_blank" rel="noreferrer">
+              <img src={url} alt="tweet media" className="dossier__tweet-thumb" loading="lazy" />
+            </a>
+          ))}
+        </div>
+      )}
       {(tw.reply_to || tw.retweeted_from) && (
         <span className="dossier__tweet-ref mono">
           {tw.reply_to ? `→ @${tw.reply_to}` : `RT @${tw.retweeted_from}`}

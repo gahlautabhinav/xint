@@ -29,6 +29,7 @@ class Tweet(Base):
     geo_location: Mapped[str | None] = mapped_column(String, nullable=True)
     mentions: Mapped[list | None] = mapped_column(_JSON, nullable=True)
     hashtags: Mapped[list | None] = mapped_column(_JSON, nullable=True)
+    media_urls: Mapped[list | None] = mapped_column(_JSON, nullable=True)
     scraped_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

@@ -19,6 +19,7 @@ class TweetResponse(BaseModel):
     geo_location: str | None
     mentions: list[str] = []
     hashtags: list[str] = []
+    media_urls: list[str] = []
     scraped_at: datetime
     tweet_url: str | None = None
 

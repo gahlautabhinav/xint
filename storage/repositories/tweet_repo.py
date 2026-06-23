@@ -50,6 +50,7 @@ class TweetRepository:
                 geo_location=tw.geo_location,
                 mentions=tw.mentions or [],
                 hashtags=tw.hashtags or [],
+                media_urls=tw.media_urls or [],
                 scraped_at=now,
             ))
             count += 1

@@ -331,3 +331,19 @@
 }
 .dossier__tweet-nav:hover:not(:disabled) { color: var(--c-ink); border-color: var(--c-ink); }
 .dossier__tweet-nav:disabled { opacity: 0.3; cursor: default; }
+
+.dossier__tweet-media {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.dossier__tweet-thumb {
+  width: 120px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--c-hairline);
+  transition: opacity 0.15s;
+}
+.dossier__tweet-thumb:hover { opacity: 0.8; }

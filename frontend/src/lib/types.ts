@@ -153,6 +153,7 @@ export interface Tweet {
   geo_location: string | null;
   mentions: string[];
   hashtags: string[];
+  media_urls: string[];
   scraped_at: string;
   tweet_url: string | null;
 }

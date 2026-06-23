@@ -66,6 +66,7 @@ class TweetData:
     quote_url: str | None = None
     retweeted_from: str | None = None  # original author when this is a repost/RT
     geo_location: str | None = None    # visible location chip when user tagged location
+    media_urls: list[str] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -216,6 +217,13 @@ _TWEETS_JS = r"""
                       tw.querySelector('a[href*="maps.google"], a[href*="place"]');
         const geo_location = geoEl ? geoEl.innerText.trim() : null;
 
+        // Media images — pbs.twimg.com/media URLs only (skips avatars/cards)
+        const mediaImgs = Array.from(tw.querySelectorAll('img[src*="pbs.twimg.com/media"]'));
+        const media_urls = [...new Set(mediaImgs.map(img => {
+            // Request the largest available format
+            return img.src.replace(/&name=\w+$/, '&name=large').replace(/\?format=/, '?format=');
+        }))];
+
         return {
             tweet_id: idM ? idM[1] : null,
             text,
@@ -224,6 +232,7 @@ _TWEETS_JS = r"""
             reply_to,
             retweeted_from,
             geo_location,
+            media_urls,
         };
     });
 }
@@ -353,6 +362,7 @@ async def extract_tweets(page: Page) -> list[TweetData]:
                 quote_url=raw.get("quote_url"),
                 retweeted_from=retweeted_from,
                 geo_location=raw.get("geo_location") or None,
+                media_urls=raw.get("media_urls") or [],
             )
         )
     return tweets
