@@ -24,7 +24,12 @@ class TweetRepository:
         self._session = session
 
     async def bulk_upsert(self, account_id: uuid.UUID, tweets: list[TweetData]) -> int:
-        to_store = [tw for tw in tweets if tw.tweet_id]
+        # Deduplicate within incoming batch — X sometimes renders same tweet twice
+        _seen: dict[str, TweetData] = {}
+        for tw in tweets:
+            if tw.tweet_id and tw.tweet_id not in _seen:
+                _seen[tw.tweet_id] = tw
+        to_store = list(_seen.values())
         if not to_store:
             return 0
         existing_stmt = select(Tweet.tweet_id).where(

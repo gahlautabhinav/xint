@@ -119,6 +119,12 @@ async def scrape_account(
 
         found = await wait_for_selector(page, _PROFILE_SELECTOR, timeout_ms=10_000)
         if not found:
+            # /with_replies may not render for suspended/private accounts — retry base URL
+            await bucket.acquire()
+            ok2 = await safe_goto(page, f"{_TWITTER_BASE_URL}/{username}", timeout_ms=30_000)
+            if ok2:
+                found = await wait_for_selector(page, _PROFILE_SELECTOR, timeout_ms=10_000)
+        if not found:
             return ScrapeResult(
                 username=username,
                 profile=_EMPTY_PROFILE,
